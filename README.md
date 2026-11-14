@@ -93,7 +93,8 @@ except those used by an open diff.
   virtual environments, build output), so some language servers work only
   partly on the old side.
 - Checking out a worktree for the first time blocks Neovim until git is done.
-- Submodules, Git LFS and sparse checkouts are not handled.
+- Submodules, Git LFS and sparse checkouts are not handled. An untracked
+  nested git repository is not listed.
 
 ## Development
 

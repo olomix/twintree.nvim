@@ -99,6 +99,18 @@ describe("git", function()
       )
     end)
 
+    it("does not need HEAD when two revisions are given", function()
+      h.git(repo, "checkout", "-q", "--orphan", "unborn")
+      assert.same(
+        { before = first, after = feature },
+        git.resolve_range(repo, { "main", "feature" })
+      )
+
+      local range, err = git.resolve_range(repo, { "main" })
+      assert.is_nil(range)
+      assert.equals("cannot resolve revision: HEAD", err)
+    end)
+
     it("rejects more than two revisions", function()
       local range, err = git.resolve_range(repo, { "a", "b", "c" })
       assert.is_nil(range)
@@ -151,6 +163,20 @@ describe("git", function()
         { status = "A", path = "docs/файл.md" },
         { status = "M", path = "src/b.txt" },
       }, git.changed_files(repo, base))
+    end)
+
+    it("skips an untracked nested repository", function()
+      local inner = repo .. "/inner"
+      vim.fn.mkdir(inner, "p")
+      h.git(inner, "init", "-q", "-b", "main")
+      h.write(inner, "x.txt", "x\n")
+      h.commit(inner, "inner")
+      h.write(repo, "plain/y.txt", "y\n")
+
+      assert.same(
+        { { status = "A", path = "plain/y.txt" } },
+        git.changed_files(repo, first)
+      )
     end)
 
     it("returns nothing when the sides are equal", function()

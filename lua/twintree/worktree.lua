@@ -59,11 +59,25 @@ local function is_worktree_at(path, sha)
   return real(lines[1]) == real(path) and lines[2] == sha
 end
 
-local function remove(repo, path)
+---Remove a cached worktree from disk and from the repository's registry.
+---@param repo string
+---@param path string
+function M.remove(repo, path)
   git.run(repo, { "worktree", "remove", "--force", path })
   if vim.uv.fs_stat(path) then
     vim.fs.rm(path, { recursive = true, force = true })
   end
+  git.run(repo, { "worktree", "prune" })
+  -- Fails while other worktrees of the repository remain, as intended.
+  vim.uv.fs_rmdir(vim.fs.dirname(path))
+end
+
+---@param repo string
+---@param sha string
+---@return boolean ready whether a usable worktree for `sha` is cached
+function M.is_ready(repo, sha)
+  local path = M.path(repo, sha)
+  return path ~= nil and is_worktree_at(path, sha)
 end
 
 ---Return a worktree checked out at `sha`, creating it when needed.
@@ -80,13 +94,14 @@ function M.ensure(repo, sha)
     return real(path)
   end
 
-  remove(repo, path)
-  git.run(repo, { "worktree", "prune" })
+  M.remove(repo, path)
   vim.fn.mkdir(vim.fs.dirname(path), "p")
 
   vim.notify(("twintree: checking out %s"):format(sha:sub(1, 10)))
   local _, add_err = git.run(repo, { "worktree", "add", "--detach", path, sha })
   if add_err then
+    -- git keeps the worktree registered when a post-checkout hook fails.
+    M.remove(repo, path)
     return nil, add_err
   end
   return real(path)
@@ -121,15 +136,9 @@ function M.clean(repo, in_use)
   local removed = 0
   for _, path in ipairs(M.list(repo)) do
     if not keep[path] then
-      remove(repo, path)
+      M.remove(repo, path)
       removed = removed + 1
     end
-  end
-  git.run(repo, { "worktree", "prune" })
-  local dir = M.repo_dir(repo)
-  if dir then
-    -- Fails when worktrees in use remain, which is what we want.
-    vim.uv.fs_rmdir(dir)
   end
   return removed
 end

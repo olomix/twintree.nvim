@@ -49,7 +49,8 @@ end
 ---@return twintree.Line[]
 local function lines_of(state)
   local function exists(side, path)
-    return vim.uv.fs_stat(vim.fs.joinpath(side.root, path)) ~= nil
+    local stat = vim.uv.fs_stat(vim.fs.joinpath(side.root, path))
+    return stat ~= nil and stat.type == "directory"
   end
   local function dir_status(path)
     local before, after = exists(state.before, path), exists(state.after, path)

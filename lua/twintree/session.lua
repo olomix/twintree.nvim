@@ -144,7 +144,9 @@ end
 
 local function file_buf(root, path)
   local full = vim.fs.joinpath(root, path)
-  if not vim.uv.fs_stat(full) then
+  local stat = vim.uv.fs_stat(full)
+  -- A file can be replaced by a directory of the same name, and vice versa.
+  if not stat or stat.type ~= "file" then
     return M.placeholder()
   end
   local buf = vim.fn.bufadd(full)

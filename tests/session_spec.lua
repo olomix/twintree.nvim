@@ -159,6 +159,30 @@ describe("session", function()
       assert_nothing_opened()
     end)
 
+    it("removes the worktrees it created when opening fails later", function()
+      h.write(repo, "a.txt", "second\n")
+      local second = h.commit(repo, "second")
+      local git = require("twintree.git")
+      local original = git.changed_files
+      git.changed_files = function()
+        return nil, "boom"
+      end
+
+      local tab, err = twintree.open({ "HEAD~1", "HEAD" })
+      assert.is_nil(tab)
+      assert.equals("boom", err)
+      assert_nothing_opened()
+      assert.same({}, worktree.list(repo))
+
+      -- A worktree that was already cached is not this call's to remove.
+      local cached = assert(worktree.ensure(repo, first))
+      tab, err = twintree.open({ "HEAD~1", "HEAD" })
+      git.changed_files = original
+      assert.is_nil(tab)
+      assert.same({ cached }, worktree.list(repo))
+      assert.is_false(worktree.is_ready(repo, second))
+    end)
+
     it("rejects more than two revisions", function()
       local tab, err = twintree.open({ "a", "b", "c" })
       assert.is_nil(tab)
@@ -333,6 +357,29 @@ describe("session", function()
       assert.equals(state.before.root .. "/src/deep/b.txt", name(state.wins.before))
       assert.equals(repo .. "/src/deep/c.txt", name(state.wins.after))
       assert_diffed()
+    end)
+
+    it("does not open a directory that replaced a file", function()
+      vim.fn.delete(repo .. "/a.txt")
+      h.write(repo, "a.txt/inner.txt", "inner\n")
+      state = session.get(assert(twintree.open()))
+      assert.truthy(vim.tbl_contains(tree_lines(state), "▾ a.txt/ A"))
+
+      state = select(state, "D a.txt")
+      assert.equals(state.before.root .. "/a.txt", name(state.wins.before))
+      assert.equals("twintree://empty", name(state.wins.after))
+      assert_diffed()
+    end)
+
+    it("lists and opens a file whose name contains a newline", function()
+      h.write(repo, "odd\nname.txt", "odd\n")
+      state = session.get(assert(twintree.open()))
+      assert.truthy(vim.tbl_contains(tree_lines(state), "A odd\\nname.txt"))
+      assert.is_false(vim.bo[state.tree_buf].modifiable)
+
+      state = select(state, "odd\\nname.txt")
+      assert.equals("odd\nname.txt", state.selected)
+      assert.same({ "odd" }, h.buf_lines(state.bufs.after))
     end)
 
     it("marks the selected line in the tree", function()

@@ -34,11 +34,15 @@ function M.parse_name_status(out)
   return entries
 end
 
----Parse NUL-separated paths, as printed by `git ls-files -z`.
+---Parse NUL-separated file paths, as printed by `git ls-files -z`.
 ---@param out string
 ---@return string[]
 function M.parse_paths(out)
-  return vim.split(out, "\0", { plain = true, trimempty = true })
+  local paths = vim.split(out, "\0", { plain = true, trimempty = true })
+  -- git lists an untracked nested repository as a directory, `inner/`.
+  return vim.tbl_filter(function(path)
+    return path:sub(-1) ~= "/"
+  end, paths)
 end
 
 ---@param entries twintree.Entry[]

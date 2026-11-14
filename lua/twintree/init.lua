@@ -31,23 +31,40 @@ function M.open(revs)
     return nil, err
   end
 
+  -- A failed open must not leave behind worktrees it created.
+  local created = {}
+  local function checkout(sha)
+    local cached = worktree.is_ready(repo, sha)
+    local root, checkout_err = worktree.ensure(repo, sha)
+    if root and not cached then
+      table.insert(created, root)
+    end
+    return root, checkout_err
+  end
+  local function fail(message)
+    for _, root in ipairs(created) do
+      worktree.remove(repo, root)
+    end
+    return nil, message
+  end
+
   local before = { commit = range.before }
-  before.root, err = worktree.ensure(repo, range.before)
+  before.root, err = checkout(range.before)
   if not before.root then
-    return nil, err
+    return fail(err)
   end
   local after = { root = repo, commit = range.after }
   if range.after then
-    after.root, err = worktree.ensure(repo, range.after)
+    after.root, err = checkout(range.after)
     if not after.root then
-      return nil, err
+      return fail(err)
     end
   end
 
   local entries
   entries, err = git.changed_files(repo, range.before, range.after)
   if not entries then
-    return nil, err
+    return fail(err)
   end
 
   local tab = session.create(repo, before, after, treeview.create_buf())

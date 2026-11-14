@@ -25,6 +25,13 @@ local status_hl = {
   R = "TwintreeRenamed",
 }
 
+---Make a name safe to show on one buffer line.
+local function display(name)
+  return (name:gsub("%c", function(char)
+    return char == "\n" and "\\n" or ("\\x%02x"):format(char:byte())
+  end))
+end
+
 local function sort_nodes(nodes)
   table.sort(nodes, function(a, b)
     if a.type ~= b.type then
@@ -89,7 +96,10 @@ end
 
 local function dir_line(node, depth, is_collapsed, status)
   local indent = ("  "):rep(depth)
-  local text = indent .. (is_collapsed and "▸ " or "▾ ") .. node.name .. "/"
+  local text = indent
+    .. (is_collapsed and "▸ " or "▾ ")
+    .. display(node.name)
+    .. "/"
   local highlights = { { #indent, #text, "TwintreeDirectory" } }
   if status then
     text = text .. " " .. status
@@ -107,9 +117,9 @@ end
 local function file_line(node, depth, selected)
   local indent = ("  "):rep(depth)
   local entry = node.entry
-  local text = indent .. entry.status .. " " .. node.name
+  local text = indent .. entry.status .. " " .. display(node.name)
   if entry.old_path then
-    text = text .. " ← " .. entry.old_path
+    text = text .. " ← " .. display(entry.old_path)
   end
   return {
     text = text,

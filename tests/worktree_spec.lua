@@ -73,6 +73,27 @@ describe("worktree", function()
     local path, err = worktree.ensure(repo, ("0"):rep(40))
     assert.is_nil(path)
     assert.truthy(err and err ~= "")
+    assert.is_nil(vim.uv.fs_stat(worktree.repo_dir(repo)))
+  end)
+
+  it("leaves nothing behind when a checkout hook fails", function()
+    local hook = repo .. "/.git/hooks/post-checkout"
+    h.write(repo, ".git/hooks/post-checkout", "#!/bin/sh\nexit 1\n")
+    vim.uv.fs_chmod(hook, 493)
+
+    local path, err = worktree.ensure(repo, sha)
+    assert.is_nil(path)
+    assert.truthy(err)
+    assert.is_false(worktree.is_ready(repo, sha))
+    assert.is_nil(vim.uv.fs_stat(worktree.path(repo, sha)))
+    assert.is_nil(vim.uv.fs_stat(worktree.repo_dir(repo)))
+    assert.is_false(listed(repo, worktree.path(repo, sha)))
+  end)
+
+  it("reports whether a worktree is cached", function()
+    assert.is_false(worktree.is_ready(repo, sha))
+    assert(worktree.ensure(repo, sha))
+    assert.is_true(worktree.is_ready(repo, sha))
   end)
 
   it("cleans cached worktrees and keeps those in use", function()

@@ -52,6 +52,10 @@ describe("changes.parse_paths", function()
     assert.same({ "a b.txt", "ї/c.txt" }, changes.parse_paths(z("a b.txt", "ї/c.txt")))
     assert.same({}, changes.parse_paths(""))
   end)
+
+  it("drops directory entries", function()
+    assert.same({ "a.txt" }, changes.parse_paths(z("inner/", "a.txt", "deep/repo/")))
+  end)
 end)
 
 describe("changes.merge_untracked", function()

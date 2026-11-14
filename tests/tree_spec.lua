@@ -108,6 +108,20 @@ describe("tree.lines", function()
     assert.is_nil(lines[3].status)
   end)
 
+  it("shows control characters in names as escapes on one line", function()
+    local entries = {
+      { status = "A", path = "dir\nx/a\nb.txt" },
+      { status = "R", old_path = "old\tname", path = "new" },
+    }
+    local lines = tree.lines(entries)
+    assert.same({
+      "▾ dir\\nx/",
+      "  A a\\nb.txt",
+      "R new ← old\\x09name",
+    }, texts(lines))
+    assert.equals("dir\nx/a\nb.txt", lines[2].path)
+  end)
+
   it("shows a message when nothing changed", function()
     local lines = tree.lines({})
     assert.same({ "No changes" }, texts(lines))

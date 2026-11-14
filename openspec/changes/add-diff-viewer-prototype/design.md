@@ -59,7 +59,10 @@ review and one rule is easier to explain. A two-dot variant can be added
 later as a flag.
 
 Revisions are resolved with `git rev-parse --verify <rev>^{commit}` before
-anything is created, so errors leave no tab or worktree behind.
+anything is created, so errors leave no tab or worktree behind. `HEAD` is
+resolved only when it is one of the sides. When a later step fails (a
+checkout, listing the changes), the worktrees created by that call are
+removed again; worktrees that were already cached stay.
 
 ### 2. Worktree location and identity
 
@@ -116,7 +119,9 @@ gopls as part of the tasks, not by automated tests.
 Both run in the repository toplevel. The parser is a pure function from the
 NUL-separated output to `{ status, path, old_path }` entries; rename and copy
 records carry two paths. Type changes and other statuses are shown as
-modified.
+modified. `ls-files` reports an untracked nested repository as a directory
+entry with a trailing slash; such entries are dropped. Control characters in
+a name (a newline is legal) are escaped for display only.
 
 ### 7. Tree is a plugin-owned scratch buffer
 

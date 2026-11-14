@@ -143,6 +143,7 @@ LIMITATIONS                                              *twintree-limitations*
   virtual environments, build output, generated code. Language servers that
   need them work only partly on the old side.
 - Checking out a worktree for the first time blocks Neovim until git is done.
-- Submodules, Git LFS and sparse checkouts are not handled.
+- Submodules, Git LFS and sparse checkouts are not handled. An untracked
+  nested git repository is not listed.
 
  vim:tw=78:ts=8:et:ft=help:norl:

@@ -103,21 +103,16 @@ function M.resolve_range(dir, revs)
     return nil, "expected at most two revisions"
   end
 
-  local after
-  if #revs == 2 then
-    local sha, err = M.resolve(dir, revs[2])
-    if not sha then
-      return nil, err
-    end
-    after = sha
-  end
-
-  local head, err = M.resolve(dir, "HEAD")
-  if not head then
+  -- The second revision replaces HEAD as the other side, so that two
+  -- named commits can be compared on a branch that has no commit yet.
+  local other_name = revs[2] or "HEAD"
+  local other, err = M.resolve(dir, other_name)
+  if not other then
     return nil, err
   end
+  local after = revs[2] and other or nil
   if #revs == 0 then
-    return { before = head }
+    return { before = other }
   end
 
   local base
@@ -125,10 +120,9 @@ function M.resolve_range(dir, revs)
   if not base then
     return nil, err
   end
-  local before
-  before, err = M.merge_base(dir, base, after or head)
+  local before = M.merge_base(dir, base, other)
   if not before then
-    return nil, ("no common ancestor of %s and %s"):format(revs[1], revs[2] or "HEAD")
+    return nil, ("no common ancestor of %s and %s"):format(revs[1], other_name)
   end
   return { before = before, after = after }
 end
