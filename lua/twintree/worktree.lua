@@ -163,6 +163,15 @@ function M.is_cached(path)
   return vim.startswith(resolved, cache .. "/")
 end
 
+---Keep a cached worktree file from using a swap file. The cache is shared
+---by all Neovim instances, and a second one would stop on E325 otherwise.
+---@param buf integer
+function M.disable_swap(buf)
+  if vim.bo[buf].buftype == "" and M.is_cached(vim.api.nvim_buf_get_name(buf)) then
+    vim.bo[buf].swapfile = false
+  end
+end
+
 ---Make a buffer read-only when its file belongs to a cached worktree.
 ---@param buf integer
 function M.protect(buf)

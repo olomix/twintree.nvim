@@ -31,6 +31,15 @@ end, { desc = "Remove cached twintree worktrees of this repository" })
 
 local group = vim.api.nvim_create_augroup("twintree", { clear = true })
 
+-- BufNew, not BufReadPre: an existing swap file is checked before reading.
+vim.api.nvim_create_autocmd("BufNew", {
+  group = group,
+  desc = "Open files of cached worktrees without a swap file",
+  callback = function(args)
+    require("twintree.worktree").disable_swap(args.buf)
+  end,
+})
+
 vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
   group = group,
   desc = "Make files of cached worktrees read-only",

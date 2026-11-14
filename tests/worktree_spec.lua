@@ -118,6 +118,24 @@ describe("worktree", function()
     assert.equals(0, worktree.clean(repo))
   end)
 
+  it("opens worktree files without a swap file", function()
+    local path = assert(worktree.ensure(repo, sha))
+    vim.o.swapfile = true
+    vim.o.directory = h.tmpdir() .. "//"
+
+    vim.cmd.edit(repo .. "/a.txt")
+    assert.is_true(vim.bo.swapfile)
+    assert.are_not.equal("", vim.fn.swapname(""))
+
+    vim.cmd.edit(path .. "/a.txt")
+    assert.is_false(vim.bo.swapfile)
+    assert.equals("", vim.fn.swapname(""))
+
+    vim.cmd.edit(path .. "/does-not-exist.txt")
+    assert.is_false(vim.bo.swapfile)
+    vim.o.swapfile = false
+  end)
+
   it("makes worktree buffers read-only and leaves the checkout editable", function()
     local path = assert(worktree.ensure(repo, sha))
 
