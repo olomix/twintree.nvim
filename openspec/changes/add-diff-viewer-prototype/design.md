@@ -142,7 +142,8 @@ worktree and for the working tree. For a collapsed chain the deepest
 directory is checked. A directory left on disk with only ignored files counts
 as existing.
 
-The line list is kept so that `<CR>` maps the cursor row to a node.
+`<CR>` maps the cursor row to a node by flattening the stored entries again;
+the result is the same as what was drawn because the pipeline is pure.
 Highlight groups (`TwintreeAdded`, `TwintreeModified`, `TwintreeDeleted`,
 `TwintreeRenamed`, `TwintreeDirectory`, `TwintreeSelected`) are defined with
 `default = true` links to standard groups. Alternatives (`nui.nvim`,
@@ -151,18 +152,20 @@ the layout.
 
 ### 8. Showing a file and keeping panes browsable
 
-Selecting an entry does, in each pane window: `diffoff`, then `:edit` of
-`root/path` (old path on the before side for renames), or a shared empty
-`nofile` placeholder buffer when the file does not exist on that side; then
-`diffthis` in both windows.
+Selecting an entry does, in each pane window: `diffoff`, then shows the
+buffer of `root/path` (old path on the before side for renames), or a shared
+empty `nofile` placeholder buffer when that path is not a regular file on
+that side; then `diffthis` in both windows. The buffer is created with
+`bufadd` and put in the window with `nvim_win_set_buf`, not with `:edit`, so
+that no character of a file name is interpreted by the command line.
 
 `diffthis` folds unchanged lines, which hides the code the plugin exists to
 show, so `foldenable` is switched off in the pane right after every
 `diffthis`. `zi` switches it back on for a hunk-only view.
 
 `diff`, `scrollbind` and `cursorbind` are window-local, so after a jump to
-another file the window would diff the wrong buffer. A `BufWinEnter`
-autocommand handles this: if the window is a pane of a session, run
+another file the window would diff the wrong buffer. A `BufWinEnter` and
+`BufEnter` autocommand handles this: if the window is a pane of a session, run
 `diffthis` when the entered buffer is that pane's selected buffer and
 `diffoff` otherwise. Options are changed through `nvim_win_call` so the
 current window does not move.
@@ -172,10 +175,12 @@ current window does not move.
 State is stored in `vim.t[tab].twintree`: the window ids of the three
 windows, the tree buffer, both sides, the repository toplevel, the selected
 path, the selected buffer per pane and the collapsed directories. It holds
-plain data only, so it survives a module reload; the entries and line list
-are recomputed on demand. Closing the tab drops the state with the tab, so
-no explicit teardown is needed. Functions look the session up by tab, and
-`BufWinEnter` finds it through the window's tab.
+plain data only, so it survives a module reload. The changed files are kept
+as plain data too, in the buffer variable `twintree_entries` of the tree
+buffer, so the tree does not change under the cursor between refreshes; the
+lines are derived from them on demand. Closing the tab drops the state with
+the tab, so no explicit teardown is needed. Functions look the session up by
+tab, and the autocommand finds it through the window's tab.
 
 Alternative: a module-level table keyed by tab; rejected because
 `:Lazy reload` would lose it.
@@ -205,8 +210,9 @@ Makefile                    `make test`
 registered in `plugin/twintree.lua`, so the plugin works without calling
 `setup()`.
 
-Git calls use `vim.system(cmd, { text = true }):wait()` and return
-`stdout` or `nil, stderr`.
+Git calls use `vim.system(cmd):wait()` and return `stdout` or
+`nil, stderr`. Output is taken as raw bytes because `-z` output is
+NUL-separated file names, not text.
 
 ### 11. Tests
 

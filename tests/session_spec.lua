@@ -183,6 +183,16 @@ describe("session", function()
       assert.is_false(worktree.is_ready(repo, second))
     end)
 
+    it("reports git's error when a worktree cannot be created", function()
+      h.write(repo, ".git/hooks/post-checkout", "#!/bin/sh\necho hook-says-no >&2\nexit 1\n")
+      vim.uv.fs_chmod(repo .. "/.git/hooks/post-checkout", 493)
+
+      local tab, err = twintree.open()
+      assert.is_nil(tab)
+      assert.truthy(err:find("hook-says-no", 1, true))
+      assert_nothing_opened()
+    end)
+
     it("rejects more than two revisions", function()
       local tab, err = twintree.open({ "a", "b", "c" })
       assert.is_nil(tab)
@@ -409,9 +419,19 @@ describe("session", function()
       assert.is_true(vim.bo[state.bufs.before].readonly)
       assert.is_false(vim.bo[state.bufs.before].modifiable)
 
+      local function is_changed(lnum)
+        return api.nvim_win_call(state.wins.after, function()
+          vim.cmd.diffupdate()
+          return vim.fn.diff_hlID(lnum, 1) ~= 0
+        end)
+      end
+      assert.is_false(is_changed(1))
+      assert.is_true(is_changed(2))
+
       api.nvim_buf_set_lines(state.bufs.after, 0, 1, false, { "ONE" })
       vim.cmd("silent write")
       assert.same({ "ONE", "TWO", "three" }, vim.fn.readfile(repo .. "/a.txt"))
+      assert.is_true(is_changed(1))
     end)
 
     it("leaves diff mode while a pane shows another file", function()
