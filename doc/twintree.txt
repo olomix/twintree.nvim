@@ -1,0 +1,148 @@
+*twintree.txt*    Diff viewer where both sides are browsable code
+
+==============================================================================
+CONTENTS                                                    *twintree-contents*
+
+    Introduction ............................. |twintree-introduction|
+    Requirements ............................. |twintree-requirements|
+    Commands ................................. |twintree-commands|
+    Layout and keys .......................... |twintree-layout|
+    Configuration ............................ |twintree-configuration|
+    Worktrees ................................ |twintree-worktrees|
+    Language servers ......................... |twintree-lsp|
+    Limitations .............................. |twintree-limitations|
+
+==============================================================================
+INTRODUCTION                                            *twintree-introduction*
+
+twintree.nvim shows a git diff in a tab with three columns: a tree of changed
+files, the version before the change and the version after it.
+
+Both versions are real files on disk. The old version is checked out into a
+git worktree, so language servers work on it: go-to-definition, references
+and hover show how the code worked before, independently of how it works now.
+
+==============================================================================
+REQUIREMENTS                                            *twintree-requirements*
+
+- Neovim 0.11 or newer
+- git
+
+==============================================================================
+COMMANDS                                                    *twintree-commands*
+
+                                                                    *:Twintree*
+:Twintree [rev1 [rev2]]
+    Open a diff for the repository that contains the current directory.
+
+    Arguments      Before                         After ~
+    (none)         HEAD                           working tree
+    rev1           merge-base of rev1 and HEAD    working tree
+    rev1 rev2      merge-base of rev1 and rev2    rev2
+
+    The merge-base is always used, as in `git diff rev1...rev2`. To review a
+    branch, `:Twintree main` shows what the branch changed since it left
+    main. When rev1 is an ancestor of the other side, the merge-base is rev1
+    itself, so `:Twintree HEAD~3` compares with exactly that commit.
+
+    The diff opens in a new tab. When Neovim was just started and shows only
+    an empty buffer, that tab is used instead: >
+
+        nvim +Twintree
+        nvim +"Twintree main"
+<
+    Close the tab to end the diff.
+
+                                                               *:TwintreeClean*
+:TwintreeClean
+    Remove the cached worktrees of the current repository. Worktrees used by
+    an open diff are kept. See |twintree-worktrees|.
+
+==============================================================================
+LAYOUT AND KEYS                                               *twintree-layout*
+
+Tree window (left):
+
+    <CR>    On a file: show it in both panes and move to the after pane.
+            On a directory: fold or unfold it.
+    R       Recompute the list of changed files.
+
+Status letters: A added, M modified, D deleted, R renamed. Untracked files of
+the working tree are listed as added. A directory that contains only one
+directory is shown together with it on one line.
+
+A directory that exists on one side only has a letter after its name, in the
+colour of that status: A when it is missing on the before side, D when it is
+missing on the after side.
+
+Before and after panes:
+
+The selected file is shown in diff mode in both panes, in full: unchanged
+lines are not folded. Use `zi` in a pane to switch folding on and see only
+the changes with context. The panes are normal windows. When you leave the selected file in a pane, for example with
+go-to-definition, diff mode is switched off in that pane, and it is switched
+on again when you return to the file.
+
+When the after side is the working tree, its buffers are the files of your
+checkout and can be edited. Files of a worktree are read-only.
+
+Highlight groups, linked by default:
+
+    TwintreeAdded        Added
+    TwintreeModified     Changed
+    TwintreeDeleted      Removed
+    TwintreeRenamed      Special
+    TwintreeDirectory    Directory
+    TwintreeSelected     Visual
+
+==============================================================================
+CONFIGURATION                                          *twintree-configuration*
+
+                                                             *twintree.setup()*
+Calling setup is optional. Defaults: >lua
+
+    require("twintree").setup({
+      -- Width of the tree window.
+      tree_width = 35,
+      -- Directory for cached worktrees.
+      -- Default: stdpath("cache") .. "/twintree"
+      cache_dir = nil,
+    })
+<
+Lua API: >lua
+
+    require("twintree").open({ "main" })  -- same as :Twintree main
+    require("twintree").clean()           -- same as :TwintreeClean
+<
+==============================================================================
+WORKTREES                                                  *twintree-worktrees*
+
+Every side that is a commit is a git worktree with a detached HEAD, stored at
+>
+    <cache_dir>/<repository>-<hash>/<commit>
+<
+Worktrees are kept after the diff is closed and reused the next time the same
+commit is needed, so reopening a diff is fast and language servers keep their
+index. They are registered in your repository and appear in
+`git worktree list`. They lock no branch.
+
+Use |:TwintreeClean| to remove them. Worktrees of a repository that no longer
+exists can be deleted from the cache directory by hand.
+
+==============================================================================
+LANGUAGE SERVERS                                                 *twintree-lsp*
+
+The plugin contains no LSP code. A worktree has the same root markers as your
+checkout, so your LSP configuration starts a second client for it. Check with
+`:checkhealth vim.lsp` that the two sides use clients with different roots.
+
+==============================================================================
+LIMITATIONS                                              *twintree-limitations*
+
+- Files that git does not track are missing in worktrees: `node_modules`,
+  virtual environments, build output, generated code. Language servers that
+  need them work only partly on the old side.
+- Checking out a worktree for the first time blocks Neovim until git is done.
+- Submodules, Git LFS and sparse checkouts are not handled.
+
+ vim:tw=78:ts=8:et:ft=help:norl:
