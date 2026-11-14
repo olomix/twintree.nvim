@@ -81,3 +81,9 @@ a required worktree cannot be created.
 #### Scenario: Creation fails
 - **WHEN** git fails to create a worktree
 - **THEN** the user sees git's error message and no session tab is opened
+
+#### Scenario: Checkout hook fails
+- **WHEN** a post-checkout hook of the repository fails while the worktree is
+  created
+- **THEN** the error is reported and no worktree for that commit remains on
+  disk or in the repository's worktree registry

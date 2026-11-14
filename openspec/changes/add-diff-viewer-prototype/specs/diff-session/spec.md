@@ -27,6 +27,11 @@ contains Neovim's current working directory.
 - **THEN** a session opens with the merge-base of `main` and `feature` as the
   before side and the commit of `feature` as the after side
 
+#### Scenario: Two revisions on a branch without commits
+- **WHEN** the user runs `:Twintree main feature` while `HEAD` cannot be
+  resolved
+- **THEN** the session opens, because `HEAD` is not one of the sides
+
 #### Scenario: More than two arguments
 - **WHEN** the user runs `:Twintree a b c`
 - **THEN** the command is rejected with an error and no session opens
@@ -44,6 +49,11 @@ worktrees unchanged when a session cannot be opened.
 - **WHEN** the user runs `:Twintree no-such-rev`
 - **THEN** an error names the revision that could not be resolved and no tab
   or worktree is created
+
+#### Scenario: Failure after a worktree was created
+- **WHEN** a step fails after the command has already created a worktree
+- **THEN** the worktrees created by that command are removed again, and
+  worktrees that were cached before are kept
 
 #### Scenario: No common ancestor
 - **WHEN** the two revisions to compare have no merge-base
@@ -97,6 +107,12 @@ file buffers located in the root directory of their side.
 - **WHEN** the user selects a file that exists only on the before side
 - **THEN** the before pane shows the file and the after pane shows an empty
   placeholder buffer
+
+#### Scenario: File replaced by a directory
+- **WHEN** the user selects a deleted file whose path is a directory on the
+  other side
+- **THEN** the side where it is a directory shows the empty placeholder
+  buffer, not the directory
 
 #### Scenario: Renamed file
 - **WHEN** the user selects a renamed file

@@ -35,6 +35,7 @@
 - [x] 5.4 Implement `open(revs)` in `init.lua` connecting side resolution, worktrees, changed files, layout and tree, creating nothing when resolution or worktree creation fails; verify with integration specs for the three argument forms, for the error cases (no new tab, no worktree), and for two sessions in two tabs selecting files independently
 - [x] 5.5 Verify reload safety with a spec: open a session, clear `package.loaded` for `twintree*`, re-source `plugin/twintree.lua`, select a file, and check that both panes update and each autocommand exists once
 - [x] 5.6 Switch folding off in a pane after every `diffthis` so unchanged lines stay visible; verify with a spec that a 60-line file with one change has no closed fold in either pane, also after leaving the file and returning
+- [x] 5.7 Remove the worktrees a failed open created, clean up after a failed `git worktree add`, resolve `HEAD` only when it is a side, treat a directory as not a file when choosing pane buffers, escape control characters in tree names and drop untracked nested repositories; verify with the specs added for each case in `tests/`
 
 ## 6. Commands and documentation
 

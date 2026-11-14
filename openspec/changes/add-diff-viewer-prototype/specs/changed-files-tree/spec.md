@@ -30,6 +30,17 @@ Renames SHALL be detected and shown as one entry under the new path.
 - **WHEN** a changed file name contains spaces or non-ASCII characters
 - **THEN** the file is listed under its exact name and can be opened
 
+#### Scenario: Control characters in a file name
+- **WHEN** a changed file name contains a newline or another control
+  character
+- **THEN** the file is listed on a single line with the character shown as an
+  escape, and it can be opened
+
+#### Scenario: Untracked nested repository
+- **WHEN** the working tree contains an untracked directory that is itself a
+  git repository
+- **THEN** that directory is not listed
+
 ### Requirement: Tree presentation
 The tree SHALL group files under their directories, show directories before
 files, sort entries by name within a directory, and show a status marker with
