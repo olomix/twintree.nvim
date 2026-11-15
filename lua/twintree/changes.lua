@@ -110,7 +110,6 @@ function M.merge_untracked(entries, untracked, line_count)
     by_path[entry.path] = entry
   end
   for _, path in ipairs(untracked) do
-    local lines = line_count(path)
     local known = by_path[path]
     if known then
       -- Removed from the index but still on disk (`git rm --cached`). Git
@@ -119,6 +118,7 @@ function M.merge_untracked(entries, untracked, line_count)
       known.status = "M"
       known.added, known.deleted = nil, nil
     else
+      local lines = line_count(path)
       table.insert(entries, {
         status = "A",
         path = path,

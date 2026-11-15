@@ -127,12 +127,19 @@ describe("changes.merge_untracked", function()
 
   it("gives no counts to a file removed from the index but still on disk", function()
     local entries = { { status = "D", path = "a.txt", added = 0, deleted = 4 } }
+    local counted = {}
     assert.same(
-      { { status = "M", path = "a.txt" } },
-      changes.merge_untracked(entries, { "a.txt" }, function()
+      {
+        { status = "M", path = "a.txt" },
+        { status = "A", path = "b.txt", added = 6, deleted = 0 },
+      },
+      changes.merge_untracked(entries, { "a.txt", "b.txt" }, function(path)
+        table.insert(counted, path)
         return 6
       end)
     )
+    -- Its lines are not needed, so the file is not read.
+    assert.same({ "b.txt" }, counted)
   end)
 
   it("treats an unstaged-removed file that is still on disk as modified", function()

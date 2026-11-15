@@ -90,8 +90,9 @@ as plain strings.
 
 `MIN_NAME` is 10 cells, or the full name when it is shorter. In case 4 the
 name gets whatever is left after guides, icon and status letter, at least
-one cell; when not even that is available the line is the status letter
-alone, cut to the width.
+one cell. When not even that is available the line is squeezed: as much of
+the guides and the icon as fits, then the status letter; in a window one
+cell wide, the status letter alone.
 
 This deviates from the order named during exploration ("counts are dropped
 before the name is cut"): the reference layout keeps the counts and cuts
@@ -156,8 +157,9 @@ file. Rejected: one process per file.
   and using fixed glyphs with both plugins keeps the two states distinct.
 
 The provider is looked up at each draw with `pcall(require, ...)`, so
-installing or removing a plugin needs no restart, and a provider that
-raises is treated as absent.
+installing or removing a plugin needs no restart. Each icon lookup is
+protected as well: a lookup that raises, for example because the plugin was
+not set up, gives that file no icon and nothing else changes.
 
 New option `icons = true` in `config.lua`.
 
@@ -165,7 +167,7 @@ New option `icons = true` in `config.lua`.
 
 `treeview.text_width(state)` is the text width (window width minus
 `textoff` from `getwininfo`) of the session's tree window, else of the
-first window in the tab that shows the tree buffer, else
+first window that shows the tree buffer, else
 `config.options.tree_width`.
 
 `treeview.draw` passes that width and stores it in the buffer variable
