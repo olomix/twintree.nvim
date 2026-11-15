@@ -109,3 +109,11 @@ vim.api.nvim_create_autocmd("OptionSet", {
     require("twintree.treeview").redraw_if_resized()
   end,
 })
+
+vim.api.nvim_create_autocmd("SwapExists", {
+  group = group,
+  desc = "Ask about a swap file of a file the plugin puts into a pane",
+  callback = function()
+    require("twintree.swap").on_swap_exists()
+  end,
+})

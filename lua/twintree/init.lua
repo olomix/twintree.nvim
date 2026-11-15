@@ -230,7 +230,11 @@ function M.reset_layout()
   session.save(tab, state)
 
   if state.pair then
-    session.show_pair(tab, state.pair)
+    local shown, show_err = session.show_pair(tab, state.pair)
+    if not shown then
+      -- The layout is rebuilt either way; only the file is missing.
+      vim.notify("twintree: " .. show_err, vim.log.levels.ERROR)
+    end
     vim.api.nvim_set_current_win(after_win)
   else
     session.clear_selection(tab)

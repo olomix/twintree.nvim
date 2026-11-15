@@ -62,6 +62,37 @@ function M.buf_lines(buf)
   return vim.api.nvim_buf_get_lines(buf, 0, -1, false)
 end
 
+---Start a second Neovim that edits `path` and so holds its swap file in
+---`swap_dir`. With `kill` the process is killed, which leaves the swap file
+---behind as after a crash.
+---@return integer job
+function M.swap_owner(path, swap_dir, kill)
+  local job = vim.fn.jobstart({
+    vim.v.progpath,
+    "--headless",
+    "-u",
+    "NONE",
+    "--cmd",
+    "set swapfile directory=" .. swap_dir .. "//",
+    path,
+    "-c",
+    "normal! ix",
+    "-c",
+    "preserve",
+  })
+  assert(job > 0, "could not start a second Neovim")
+  assert(vim.wait(5000, function()
+    return #vim.fn.glob(swap_dir .. "/*", true, true) > 0
+  end, 20), "the second Neovim wrote no swap file")
+  if kill then
+    vim.uv.kill(vim.fn.jobpid(job), "sigkill")
+    assert(vim.wait(5000, function()
+      return vim.fn.jobwait({ job }, 0)[1] ~= -1
+    end, 20), "the second Neovim did not die")
+  end
+  return job
+end
+
 ---A tree line without its padding: runs of spaces become one space.
 function M.squeeze(line)
   return (line:gsub("  +", " "))

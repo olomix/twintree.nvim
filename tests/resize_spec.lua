@@ -58,6 +58,17 @@ describe("in a real terminal", function()
     return math.abs(w.before - w.after) <= 1
   end
 
+  ---Wait until the panes satisfy `check` and return them.
+  local function settle_panes(check)
+    local last
+    local ok = vim.wait(5000, function()
+      last = lua(PANES, tab)
+      return check(last)
+    end, 50)
+    assert(ok, "panes: " .. vim.inspect(last))
+    return last
+  end
+
   local function resize(columns)
     vim.fn.jobresize(job, columns, 40)
   end
@@ -386,5 +397,121 @@ describe("in a real terminal", function()
     assert.is_true(last.before.diff)
     assert.is_true(last.after.diff)
     assert.equals(0, lua("return vim.g.drawn_in_wrong_pane"))
+  end)
+
+  describe("with a swap file left by a killed Neovim", function()
+    local owner
+
+    ---Leave a swap file for a.txt and make the child record what it asks.
+    local function leave_swap_file()
+      local swap_dir = h.tmpdir()
+      lua(
+        [[
+          vim.o.swapfile = true
+          vim.o.directory = ... .. "//"
+          local swap = require("twintree.swap")
+          local ask = swap.ask
+          swap.ask = function(text, labels)
+            vim.g.asked = text
+            return ask(text, labels)
+          end
+        ]],
+        swap_dir
+      )
+      owner = h.swap_owner(repo .. "/a.txt", swap_dir, true)
+    end
+
+    ---The prompt blocks requests, so the answer is typed after a pause.
+    ---The messages that follow can leave a "Press ENTER" prompt, which
+    ---blocks requests as well; Escape dismisses it and does nothing else.
+    local function answer(key)
+      vim.wait(1000)
+      press(key)
+      vim.wait(500)
+      press("<Esc>")
+    end
+
+    local function after_pane()
+      return lua(
+        [[
+          local state = require("twintree.session").get(...)
+          local buf = vim.api.nvim_win_get_buf(state.wins.after)
+          return {
+            file = vim.api.nvim_buf_get_name(buf),
+            readonly = vim.bo[buf].readonly,
+            diff = vim.wo[state.wins.after].diff,
+            asked = vim.g.asked or "",
+            messages = vim.api.nvim_exec2("messages", { output = true }).output,
+          }
+        ]],
+        tab
+      )
+    end
+
+    after_each(function()
+      if owner then
+        pcall(vim.fn.jobstop, owner)
+        owner = nil
+      end
+    end)
+
+    pty_it("asks and opens the file read-only on that answer", function()
+      leave_swap_file()
+      focus("tree")
+      press("/a.txt<CR><CR>")
+      answer("o")
+
+      local last
+      local ok = vim.wait(5000, function()
+        last = after_pane()
+        return last.file == repo .. "/a.txt" and last.diff
+      end, 50)
+      assert(ok, vim.inspect(last))
+      assert.is_true(last.readonly)
+      assert.truthy(last.asked:find("E325: ATTENTION", 1, true))
+      assert.truthy(last.asked:find("process ID: no longer running", 1, true))
+      assert.is_nil(last.messages:find("stack traceback", 1, true))
+    end)
+
+    pty_it("asks and leaves the panes as they were on Abort", function()
+      leave_swap_file()
+      focus("tree")
+      press("/a.txt<CR><CR>")
+      answer("a")
+
+      local last
+      local ok = vim.wait(5000, function()
+        last = after_pane()
+        return last.messages:find("a.txt was not opened", 1, true) ~= nil
+      end, 50)
+      assert(ok, vim.inspect(last))
+      assert.truthy(vim.endswith(last.file, "twintree://empty"))
+      assert.is_false(last.diff)
+      assert.truthy(last.asked:find("E325: ATTENTION", 1, true))
+      assert.is_nil(last.messages:find("stack traceback", 1, true))
+    end)
+
+    pty_it("asks after a jump in the before pane and shows the counterpart", function()
+      focus("tree")
+      press("/long.txt<CR><CR>")
+      local root = settle_panes(function(p)
+        return p.after.file == repo .. "/long.txt"
+      end).root
+      leave_swap_file()
+
+      focus("before")
+      press(":edit " .. root .. "/a.txt<CR>")
+      answer("e")
+
+      local last
+      local ok = vim.wait(5000, function()
+        last = after_pane()
+        return last.file == repo .. "/a.txt" and last.diff
+      end, 50)
+      assert(ok, vim.inspect(last))
+      assert.is_false(last.readonly)
+      assert.truthy(last.asked:find("E325: ATTENTION", 1, true))
+      assert.is_nil(last.messages:find("stack traceback", 1, true))
+    end)
   end)
 end)

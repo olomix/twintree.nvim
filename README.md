@@ -107,6 +107,23 @@ To keep another file next to the diff, open a window of your own with
 When the after side is the working tree it is your checkout and can be
 edited. Worktree files are read-only.
 
+### Files with a swap file
+
+A file of your checkout that a pane is about to show may have a swap file.
+
+- **The file is open in another running Neovim.** It opens as usual, and
+  Neovim prints its one-line warning (`W325`). You can edit it in both; the
+  second one to save is warned that the file changed on disk.
+- **The swap file was left by a crash.** The plugin asks, with the facts and
+  the choices of Neovim's own dialog: Open Read-Only, Edit anyway, Recover,
+  Delete it, Quit, Abort.
+- **You answer Quit or Abort.** The file is not opened and one line says so.
+  After a selection in the tree the panes show what they showed before.
+  After a jump in a pane, that pane keeps the file you went to, without
+  diff mode, and the other pane keeps its file.
+
+Files of the old side never use swap files.
+
 ### Closing the diff
 
 The diff lives in its own tab, opened next to the tabs you already have. To
