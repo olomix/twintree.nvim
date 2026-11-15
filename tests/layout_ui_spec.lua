@@ -190,6 +190,9 @@ describe("layout", function()
       h.reset()
       vim.o.columns = 30
       tab = assert(twintree.open())
+      -- The first file is shown, which moved the cursor into a pane.
+      assert.equals("src/b.txt", state().selected)
+      assert.equals(state().wins.after, api.nvim_get_current_win())
       layout.sync(tab)
       assert.is_false(state().layout.zoomed)
       assert.is_true(vim.wo[tree()].winfixwidth)

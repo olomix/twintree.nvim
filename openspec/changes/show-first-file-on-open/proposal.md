@@ -42,7 +42,9 @@ None.
 
 - `lua/twintree/init.lua`: `open` shows the first file after the tree is
   filled, and returns the tab together with a message when the file was
-  not opened.
+  not opened. It records the layout again after the cursor moved to the
+  after pane, so that a diff opened in a narrow terminal still gets its
+  layout back when the terminal is widened.
 - `lua/twintree/treeview.lua`: a way to get the first file of the tree.
 - `tests/`: new specs for the behaviour; existing specs that rely on empty
   panes or on the cursor being in the tree after `open` need their setup
