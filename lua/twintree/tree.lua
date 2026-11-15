@@ -81,8 +81,8 @@ local function tail(text, room)
 end
 
 ---Cut a name in the middle so that it fits into `room` cells and its
----extension stays visible. The result can be a cell short of `room` when a
----wide character does not fit.
+---extension stays visible. The result can be up to two cells short of
+---`room`: one for a wide character that does not fit at each side of the cut.
 ---@param name string
 ---@param room integer
 ---@return string
@@ -90,14 +90,16 @@ function M.cut(name, room)
   if cells(name) <= room then
     return name
   end
-  if room <= 0 then
-    return ""
+  -- Measured, not assumed: the ellipsis is two cells with 'ambiwidth' double.
+  local ellipsis_cells = cells(ELLIPSIS)
+  if room < ellipsis_cells then
+    return head(name, room)
   end
-  if room == 1 then
+  if room == ellipsis_cells then
     return ELLIPSIS
   end
 
-  local keep = room - 1
+  local keep = room - ellipsis_cells
   local tail_room = math.floor(keep / 2)
   local ext = name:match("%.[^./]*$")
   if ext and ext ~= name then
@@ -227,16 +229,31 @@ local function assemble(left, right, width)
   return join(pieces)
 end
 
+---The beginning of `pieces` that is at most `room` cells wide, each piece
+---keeping its highlight.
+local function head_of(pieces, room)
+  local out = {}
+  for _, piece in ipairs(pieces) do
+    local text = head(piece[1], room)
+    table.insert(out, { text, piece[2] })
+    room = room - cells(text)
+    if text ~= piece[1] then
+      break
+    end
+  end
+  return out
+end
+
 ---A line for a window too narrow for anything but the status letter.
 local function squeezed(prefix, status, width)
   if not status then
-    return head(prefix, width), {}
+    return join(head_of(prefix, width))
   end
   if width < 2 then
     return status, { { 0, #status, status_hl[status] } }
   end
-  local left = head(prefix, width - 2)
-  return assemble({ { left } }, { { " " }, { status, status_hl[status] } }, width)
+  local right = { { " " }, { status, status_hl[status] } }
+  return assemble(head_of(prefix, width - 2), right, width)
 end
 
 ---Where a renamed file came from: the old file name when it stayed in its
@@ -292,7 +309,7 @@ local function file_line(node, depth, opts)
   if left then
     text, highlights = assemble(vim.list_extend(prefix, left), right, width)
   else
-    text, highlights = squeezed(join(prefix), entry.status, width)
+    text, highlights = squeezed(prefix, entry.status, width)
   end
   return {
     text = text,
@@ -329,7 +346,7 @@ local function dir_line(node, depth, is_collapsed, status, opts)
     table.insert(prefix, { name, "TwintreeDirectory" })
     text, highlights = assemble(prefix, right, width)
   else
-    text, highlights = squeezed(join(prefix), status, width)
+    text, highlights = squeezed(prefix, status, width)
   end
   return {
     text = text,

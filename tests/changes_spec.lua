@@ -125,10 +125,10 @@ describe("changes.merge_untracked", function()
     end))
   end)
 
-  it("adds the lines on disk to a file removed from the index", function()
+  it("gives no counts to a file removed from the index but still on disk", function()
     local entries = { { status = "D", path = "a.txt", added = 0, deleted = 4 } }
     assert.same(
-      { { status = "M", path = "a.txt", added = 6, deleted = 4 } },
+      { { status = "M", path = "a.txt" } },
       changes.merge_untracked(entries, { "a.txt" }, function()
         return 6
       end)

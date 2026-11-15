@@ -52,6 +52,11 @@ the counts are not available, such as a binary file, SHALL show no counts.
 - **WHEN** a file was renamed and 2 of its lines were changed
 - **THEN** its line shows the counts of that change under the new name
 
+#### Scenario: File removed from the index but still on disk
+- **WHEN** the after side is the working tree and a file was removed from the
+  index but is still on disk
+- **THEN** its line shows the status letter and no counts
+
 ### Requirement: Icons
 When an icon plugin is installed and icons are not switched off, a file line
 SHALL show the icon of the file's type before the name, and a directory line
@@ -101,6 +106,12 @@ with wide or non-ASCII characters are cut and aligned correctly.
 - **THEN** the line is exactly as wide as the window and the status letter
   is in its column
 
+#### Scenario: Ambiguous-width characters shown two cells wide
+- **WHEN** `ambiwidth` is `double`, so that the ellipsis and the guides take
+  two cells each, and names are cut
+- **THEN** no line is wider than the window and every file line ends with
+  its status letter
+
 ### Requirement: Order of giving way
 When a line does not fit, the tree SHALL give up parts in this order: the
 rename origin is left out; the name is cut down to a minimum length; the
@@ -119,6 +130,11 @@ always be shown.
 #### Scenario: Extremely narrow
 - **WHEN** the window is only a few cells wide
 - **THEN** the line still ends with the status letter and no error is raised
+
+#### Scenario: Highlights in a squeezed line
+- **WHEN** a line has room only for part of its guides and icon before the
+  status letter
+- **THEN** the guides and the icon that are shown keep their highlights
 
 ### Requirement: Rename origin
 The line of a renamed file SHALL show where it came from, after the new
@@ -166,6 +182,12 @@ the right edge and names are cut for the current width.
 #### Scenario: Narrowing the tree
 - **WHEN** the user makes the tree window narrower
 - **THEN** no line is wider than the window
+
+#### Scenario: Line numbers switched on in the tree window
+- **WHEN** the user switches on line numbers, a sign column or a fold column
+  in the tree window
+- **THEN** the tree is drawn again for the narrower text area, and the
+  status letters are at its right edge
 
 #### Scenario: Tree shown again
 - **WHEN** the tree was hidden and is shown again with a different width

@@ -35,6 +35,7 @@
 - [x] 6.1 Add a case to `tests/resize_spec.lua`: in the real terminal, widen and narrow the tree window with keys and read the tree lines and the window width over RPC; every line must be as wide as the text area and end with its status letter
 - [x] 6.2 Run `make test` and verify the whole suite passes
 - [x] 6.3 Check by hand in a real terminal with an icon plugin and a Nerd Font: icons and folder glyphs, colours of counts and letters, the column at the right edge, cut names, the rename origin in a wide tree, indent guides, and resizing the tree; record the result in `notes.md` of the change without machine-specific details
+- [x] 6.4 Fixes from review: measure the ellipsis instead of assuming one cell (`ambiwidth=double`); keep the highlights of guides and icon in a squeezed line; redraw on `OptionSet` for the options that change the text area; show no counts for a file removed from the index but still on disk; correct the example in the README and help; verify with the specs added for each case, each shown to fail on the code before its fix
 
 ## Workflow follow-up
 

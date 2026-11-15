@@ -113,13 +113,11 @@ function M.merge_untracked(entries, untracked, line_count)
     local lines = line_count(path)
     local known = by_path[path]
     if known then
-      -- Removed from the index but still on disk (`git rm --cached`): git
-      -- reports its lines as deleted, the file on disk adds them back.
+      -- Removed from the index but still on disk (`git rm --cached`). Git
+      -- reports every line as deleted, which is not the difference the
+      -- panes show, so the entry carries no counts.
       known.status = "M"
-      known.added = lines
-      if not lines then
-        known.deleted = nil
-      end
+      known.added, known.deleted = nil, nil
     else
       table.insert(entries, {
         status = "A",

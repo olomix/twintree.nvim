@@ -101,11 +101,14 @@ before the name becomes unreadable.
 
 ### 4. Cutting a name in the middle
 
-`cut(name, cells)` keeps `cells - 1` cells of the name around one `…`. The
-tail gets half of them, but at least the extension (from the last dot) when
-that still leaves one cell for the head. Head and tail are taken character
-by character with `vim.fn.strdisplaywidth`, so a wide character is never
-split and the result may be one cell short; the padding absorbs that.
+`cut(name, cells)` keeps the cells that remain after one `…` around it. The
+width of the ellipsis is measured, not assumed: it is two cells when
+`ambiwidth` is `double`. The tail gets half of the remaining cells, but at
+least the extension (from the last dot) when that still leaves one cell for
+the head. Head and tail are taken character by character with
+`vim.fn.strdisplaywidth`, so a wide character is never split and the result
+may be up to two cells short, one at each side of the cut; the padding
+absorbs that.
 
 All measuring uses display cells; highlight ranges are computed in bytes
 from the pieces as they are concatenated. Control characters are escaped
@@ -130,8 +133,10 @@ Untracked files are not in the diff. `git.count_lines(path)` reads the file
 and returns its number of lines, or nil when it contains a NUL byte in its
 first 8000 bytes (git's own test for binary), is larger than 5 MB, or cannot
 be read. An entry that was removed from the index but is still on disk
-(reported as modified today) keeps the deleted count from git and gets the
-file's line count as added.
+(reported as modified today) carries no counts: git reports all of its lines
+as deleted, which is not the difference between the two sides that the
+panes show, and computing that difference would need the old content of the
+file.
 
 Alternative: `git diff --no-index --numstat /dev/null <file>` per untracked
 file. Rejected: one process per file.
@@ -166,8 +171,15 @@ first window in the tab that shows the tree buffer, else
 `treeview.draw` passes that width and stores it in the buffer variable
 `twintree_width`. `treeview.redraw_if_resized(tab)` draws again when the
 current text width differs from the stored one. It is called from the
-existing size autocommand after `layout.sync`, and after
-`layout.reapply` in `toggle_tree` and `reset_layout`.
+existing size autocommand after `layout.sync`, after `layout.reapply` in
+`toggle_tree` and `reset_layout`, and from an `OptionSet` autocommand for
+`number`, `relativenumber`, `numberwidth`, `signcolumn` and `foldcolumn`,
+which change the text area without changing the window width. A sign column
+that appears by itself (`signcolumn=auto`) raises no event and is picked up
+at the next redraw.
+
+In a squeezed line, where only the beginning of the guides and the icon
+fits before the status letter, those pieces keep their highlights.
 
 Draws that the session triggers when the panes follow navigation use the
 same width lookup. They cost one icon lookup per line and no git call.

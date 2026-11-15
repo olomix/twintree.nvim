@@ -232,6 +232,45 @@ describe("tree view", function()
       assert_fits(28)
     end)
 
+    ---Set a window option. Neovim does not fire OptionSet while it is
+    ---starting, which is when these specs run, so the event is fired here;
+    ---`tests/resize_spec.lua` covers the real event.
+    local function set_option(option, value)
+      api.nvim_set_option_value(option, value, { win = tree_win() })
+      api.nvim_exec_autocmds("OptionSet", { group = "twintree", pattern = option })
+    end
+
+    for option, value in pairs({
+      number = true,
+      relativenumber = true,
+      signcolumn = "yes",
+      foldcolumn = "2",
+    }) do
+      it(("happens when '%s' shrinks the text area"):format(option), function()
+        set_option(option, value)
+        local textoff = vim.fn.getwininfo(tree_win())[1].textoff
+        assert.is_true(textoff > 0)
+        assert_fits(35 - textoff)
+      end)
+    end
+
+    it("happens when 'numberwidth' changes", function()
+      set_option("number", true)
+      set_option("numberwidth", 8)
+      assert_fits(35 - 8)
+    end)
+
+    it("is registered for every option that changes the text area", function()
+      local patterns = vim.tbl_map(function(autocmd)
+        return autocmd.pattern
+      end, api.nvim_get_autocmds({ group = "twintree", event = "OptionSet" }))
+      table.sort(patterns)
+      assert.same(
+        { "foldcolumn", "number", "numberwidth", "relativenumber", "signcolumn" },
+        patterns
+      )
+    end)
+
     it("happens when a hidden tree is shown at another width", function()
       assert(twintree.toggle_tree())
       local s = state()

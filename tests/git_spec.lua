@@ -217,14 +217,12 @@ describe("git", function()
       assert.same({ { status = "A", path = "new.bin" } }, git.changed_files(repo, second))
     end)
 
-    it("counts a file removed from the index but still on disk", function()
+    it("gives no counts for a file removed from the index but still on disk", function()
       h.write(repo, "a.txt", "a\nmore\nlines\n")
       h.git(repo, "rm", "-q", "--cached", "a.txt")
 
-      assert.same(
-        { { status = "M", path = "a.txt", added = 3, deleted = 1 } },
-        git.changed_files(repo, first)
-      )
+      -- Git reports the file as deleted, the panes show it as changed.
+      assert.same({ { status = "M", path = "a.txt" } }, git.changed_files(repo, first))
     end)
 
     it("returns nothing when the sides are equal", function()

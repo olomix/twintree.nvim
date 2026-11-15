@@ -100,3 +100,12 @@ vim.api.nvim_create_autocmd("TabClosed", {
     require("twintree.treeview").sweep()
   end,
 })
+
+vim.api.nvim_create_autocmd("OptionSet", {
+  group = group,
+  pattern = { "number", "relativenumber", "numberwidth", "signcolumn", "foldcolumn" },
+  desc = "Redraw the tree when its text area changes without a resize",
+  callback = function()
+    require("twintree.treeview").redraw_if_resized()
+  end,
+})

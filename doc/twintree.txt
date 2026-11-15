@@ -100,7 +100,8 @@ letter at the right edge of the window: >
     │ json.go                  +9 -4 M
     │ json_test.go           +23 -18 M
     ▾ db_migrations/ams/             A
-    │ kz_028_pr…_events.sql   +40 -0 A
+    │ kz_028_prom…_events.sql +40 -0 A
+    ▾ pkg/
     │ client.go ← api.go      +12 -3 R
 <
 Status letters: A added, M modified, D deleted, R renamed. Untracked files of
@@ -112,15 +113,18 @@ status letters, in the colour of that status: A when it is missing on the
 before side, D when it is missing on the after side.
 
 Line counts are the lines added and deleted between the two sides. An
-untracked file counts as all lines added. A binary file, and an untracked
-file larger than 5 MB, shows no counts.
+untracked file counts as all lines added. A binary file, an untracked file
+larger than 5 MB, and a file that was removed from the index but is still on
+disk show no counts.
 
 Icons are shown when |twintree-icons| finds an icon plugin. Directories then
 have folder glyphs in place of the arrows.
 
 A name that does not fit is cut in the middle, so that its beginning and its
 extension stay visible. The tree is drawn for the width of its window and
-drawn again when that width changes, so widening the tree shows more.
+drawn again when that width changes, so widening the tree shows more. It is
+also drawn again when line numbers, a sign column or a fold column are
+switched on in its window.
 
 A renamed file shows where it came from after its name, when the whole line
 still fits: the old file name for a rename within a directory, the old path

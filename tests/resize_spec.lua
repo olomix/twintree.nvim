@@ -224,6 +224,36 @@ describe("in a real terminal", function()
     fits(16)
   end)
 
+  pty_it("redraws the tree when line numbers take part of its window", function()
+    focus("tree")
+    press(":setlocal number numberwidth=6<CR>")
+    local last
+    local ok = vim.wait(5000, function()
+      last = lua(
+        [[
+          local session = require("twintree.session")
+          local state = session.get(...)
+          local win = session.tree_win(state)
+          return {
+            room = vim.api.nvim_win_get_width(win) - vim.fn.getwininfo(win)[1].textoff,
+            lines = vim.api.nvim_buf_get_lines(state.tree_buf, 0, -1, false),
+          }
+        ]],
+        tab
+      )
+      if last.room ~= 35 - 6 then
+        return false
+      end
+      for _, line in ipairs(last.lines) do
+        if vim.fn.strdisplaywidth(line) ~= last.room or not line:match(" [AMDR]$") then
+          return false
+        end
+      end
+      return #last.lines > 0
+    end, 50)
+    assert(ok, vim.inspect(last))
+  end)
+
   pty_it("keeps a hand-set ratio across a resize", function()
     focus("before")
     press(":vertical resize 30<CR>")

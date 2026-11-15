@@ -64,7 +64,8 @@ deleted, and its status at the right edge:
 │ json.go                  +9 -4 M
 │ json_test.go           +23 -18 M
 ▾ db_migrations/ams/             A
-│ kz_028_pr…_events.sql   +40 -0 A
+│ kz_028_prom…_events.sql +40 -0 A
+▾ pkg/
 │ client.go ← api.go      +12 -3 R
 ```
 

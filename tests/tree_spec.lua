@@ -243,6 +243,29 @@ describe("tree.lines", function()
       end
     end)
 
+    it("keeps the highlights of what is left in a squeezed line", function()
+      local lines = tree.lines({ { status = "M", path = "a/b/c/d/file.lua" } }, {
+        width = 5,
+        icon = fake_icon,
+      })
+      assert.equals("O a…/", lines[1].text)
+      local file = lines[2]
+      assert.equals("│ L M", file.text)
+      assert.same({ "│ " }, highlighted(file, "TwintreeGuide"))
+      assert.same({ "L" }, highlighted(file, "LuaHl"))
+      assert.same({ "M" }, highlighted(file, "TwintreeModified"))
+
+      local dir = tree.lines({ { status = "M", path = "a/b" } }, {
+        width = 3,
+        icon = fake_icon,
+        dir_status = function()
+          return "A"
+        end,
+      })[1]
+      assert.equals("O A", dir.text)
+      assert.same({ "O" }, highlighted(dir, "FolderHl"))
+    end)
+
     it("treats a width below one as one", function()
       assert.equals("M", line(0, { status = "M", path = "a.lua" }))
     end)
@@ -375,6 +398,45 @@ describe("tree.lines", function()
   end)
 end)
 
+describe("with ambiguous-width characters two cells wide", function()
+  before_each(function()
+    vim.o.ambiwidth = "double"
+  end)
+
+  after_each(function()
+    vim.o.ambiwidth = "single"
+  end)
+
+  it("measures the ellipsis instead of assuming one cell", function()
+    assert.equals(2, cells("…"))
+    for room = 0, 30 do
+      local cut = tree.cut(LONG, room)
+      assert.is_true(cells(cut) <= room, ("%q for %d"):format(cut, room))
+    end
+    assert.equals("…", tree.cut(LONG, 2))
+    assert.equals("k", tree.cut(LONG, 1))
+    assert.truthy(tree.cut(LONG, 14):match("%.sql$"))
+  end)
+
+  it("keeps every line within the width", function()
+    local entries = {
+      { status = "A", path = "deep/er/" .. LONG, added = 40, deleted = 0 },
+      { status = "R", path = "b.lua", old_path = "a.lua", added = 1, deleted = 1 },
+    }
+    for width = 1, 45 do
+      for _, line in ipairs(tree.lines(entries, { width = width })) do
+        assert.is_true(
+          cells(line.text) <= width,
+          ("%q is %d cells at width %d"):format(line.text, cells(line.text), width)
+        )
+        if line.type == "file" then
+          assert.truthy(line.text:match("[AMDR]$"), line.text)
+        end
+      end
+    end
+  end)
+end)
+
 describe("tree.cut", function()
   it("leaves a name that fits alone", function()
     assert.equals("a.lua", tree.cut("a.lua", 5))
@@ -406,6 +468,10 @@ describe("tree.cut", function()
     assert.equals("…", tree.cut("abcdef", 1))
     assert.equals("a…", tree.cut("abcdef", 2))
     assert.equals("a…f", tree.cut("abcdef", 3))
+  end)
+
+  it("can come out two cells short around wide characters", function()
+    assert.equals("日…語", tree.cut("日本語日本語日本語", 7))
   end)
 
   it("never splits a wide character", function()
