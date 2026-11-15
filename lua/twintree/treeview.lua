@@ -24,7 +24,9 @@ end
 ---@return integer buf
 function M.create_buf()
   local buf = vim.api.nvim_create_buf(false, true)
-  vim.bo[buf].bufhidden = "wipe"
+  -- Kept when its window closes, so the tree can be hidden and shown again.
+  -- `sweep` deletes it when its tab is closed.
+  vim.bo[buf].bufhidden = "hide"
   vim.bo[buf].modifiable = false
   vim.bo[buf].filetype = "twintree"
   vim.api.nvim_buf_set_name(buf, "twintree://tree/" .. buf)
@@ -166,6 +168,82 @@ function M.refresh()
     session.clear_selection(tab)
   end
   M.set_entries(tab, entries)
+end
+
+---The tree buffer of a session, rebuilt when the user deleted it.
+---@param tab integer
+---@return integer? buf
+---@return string? err
+function M.ensure_buf(tab)
+  local state = session.get(tab)
+  if not state then
+    return nil, session.NO_SESSION
+  end
+  if vim.api.nvim_buf_is_valid(state.tree_buf) then
+    return state.tree_buf
+  end
+  local entries, err =
+    git.changed_files(state.repo, state.before.commit, state.after.commit)
+  if not entries then
+    return nil, err
+  end
+  state.tree_buf = M.create_buf()
+  session.save(tab, state)
+  M.set_entries(tab, entries)
+  return state.tree_buf
+end
+
+---Put the cursor of a tree window on the selected file.
+---@param tab integer
+---@param win integer
+function M.focus_selected(tab, win)
+  local state = session.get(tab)
+  if not state then
+    return
+  end
+  for row, line in ipairs(lines_of(state)) do
+    if line.selected then
+      vim.api.nvim_win_set_cursor(win, { row, 0 })
+      return
+    end
+  end
+end
+
+---The changed file of a session with the given path.
+---@param tab integer
+---@param path string
+---@return twintree.Entry?
+function M.entry(tab, path)
+  local state = session.get(tab)
+  if not state or not vim.api.nvim_buf_is_valid(state.tree_buf) then
+    return nil
+  end
+  for _, entry in ipairs(entries_of(state.tree_buf)) do
+    if entry.path == path then
+      return entry
+    end
+  end
+  return nil
+end
+
+---Delete tree buffers whose diff tab is gone.
+function M.sweep()
+  local live = {}
+  for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+    local state = session.get(tab)
+    if state then
+      live[state.tree_buf] = true
+    end
+  end
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if
+      not live[buf]
+      and vim.api.nvim_buf_is_valid(buf)
+      and vim.bo[buf].filetype == "twintree"
+    then
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end
+  end
 end
 
 return M

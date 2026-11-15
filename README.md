@@ -65,7 +65,49 @@ off in that pane; return to the file and it is switched on again. When the
 after side is the working tree it is your checkout and can be edited.
 Worktree files are read-only.
 
-Close the tab to end the diff.
+### Closing the diff
+
+The diff lives in its own tab, opened next to the tabs you already have. To
+end it, close that tab with `:tabclose`. The worktree stays cached.
+
+When the diff is the only tab, as after `nvim +Twintree`, `:tabclose` refuses
+to close the last tab; quit Neovim with `:qa`.
+
+### Windows and layout
+
+The diff tab is yours: resize, zoom, split and close windows as in any other
+tab. Neovim's own window commands do most of the work, and the plugin fills
+the gaps.
+
+| Key or command | Action |
+|---|---|
+| `<C-w>t` | Go to the tree (the top-left window) |
+| `<C-w>p` | Go back to the window you came from |
+| `<C-w>=` | Make the before and after panes equally wide |
+| `<C-w>\|` | Maximize the current window; `<C-w>=` brings the layout back |
+| `<C-w>c` in the tree | Hide the tree |
+| `:TwintreeToggleTree` | Hide the tree, or show it again |
+| `:TwintreeResetLayout` | Return the tab to tree, before and after |
+
+What the plugin keeps for you:
+
+- **Pane ratio.** When the terminal is resized, the before and after panes
+  keep their ratio. It starts at half and half; resize a pane and that ratio
+  is kept; `<C-w>=` sets it back to half and half.
+- **Tree width.** The tree keeps the width you give it. `<C-w>=` leaves it
+  alone, and after a zoom with `<C-w>|` it returns to that width. Do not
+  squeeze the tree to one column to hide it; hide it instead.
+- **Hidden tree.** While the tree is hidden the diff keeps working, and the
+  tree comes back with the same folds and selection. `<C-w>t` then goes to
+  the before pane.
+
+`:TwintreeResetLayout` is the way out when the tab got into a state you do
+not want: it closes every other window of the tab (their buffers stay
+loaded), puts the tree back at its configured width, makes the panes equal
+and shows the selected file again. If a pane is missing when you select a
+file, the plugin tells you to run it.
+
+Both commands report an error when the current tab has no diff.
 
 ## Configuration
 

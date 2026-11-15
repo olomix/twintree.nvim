@@ -456,7 +456,11 @@ describe("session", function()
       select(state, "a.txt")
       restore()
       assert.equals(1, #messages)
-      assert.truthy(messages[1].msg:find("layout", 1, true))
+      assert.equals(
+        "twintree: a pane of this diff is missing; run :TwintreeResetLayout",
+        messages[1].msg
+      )
+      assert.equals(vim.log.levels.ERROR, messages[1].level)
     end)
   end)
 

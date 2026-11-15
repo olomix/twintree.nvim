@@ -16,8 +16,31 @@ local M = {}
 ---@field selected? string path of the selected file
 ---@field bufs? { before: integer, after: integer } buffers of the selected file
 ---@field collapsed table<string, boolean>
+---@field layout twintree.Layout
+
+---What the window sizes of the tab are meant to be.
+---@class twintree.Layout
+---@field ratio number before width divided by before plus after width
+---@field tree_width integer width the tree returns to
+---@field columns integer terminal width at the last synchronization
+---@field tree_shown boolean whether the tree was visible at that time
+---@field zoomed boolean whether a window was maximized at that time
 
 local PANES = { "before", "after" }
+
+M.NO_SESSION = "no diff session in this tab"
+M.BROKEN_LAYOUT = "a pane of this diff is missing; run :TwintreeResetLayout"
+
+---@return twintree.Layout
+function M.default_layout()
+  return {
+    ratio = 0.5,
+    tree_width = config.options.tree_width,
+    columns = vim.o.columns,
+    tree_shown = true,
+    zoomed = false,
+  }
+end
 
 ---@param tab? integer
 ---@return twintree.Session?
@@ -31,6 +54,8 @@ function M.get(tab)
     return nil
   end
   state.collapsed = state.collapsed or {}
+  -- Sessions opened by an older version of the plugin have no layout.
+  state.layout = state.layout or M.default_layout()
   return state
 end
 
@@ -42,13 +67,81 @@ end
 
 ---@param state twintree.Session
 ---@return boolean
-function M.is_intact(state)
-  for _, win in pairs(state.wins) do
-    if not vim.api.nvim_win_is_valid(win) then
+function M.has_panes(state)
+  for _, pane in ipairs(PANES) do
+    local win = state.wins[pane]
+    if not win or not vim.api.nvim_win_is_valid(win) then
       return false
     end
   end
-  return vim.api.nvim_buf_is_valid(state.tree_buf)
+  return true
+end
+
+---The window of the tree, or nil when the tree is hidden. The user may
+---have closed the window or put another buffer into it.
+---@param state twintree.Session
+---@return integer?
+function M.tree_win(state)
+  local win = state.wins.tree
+  if
+    win
+    and vim.api.nvim_win_is_valid(win)
+    and vim.api.nvim_win_get_buf(win) == state.tree_buf
+  then
+    return win
+  end
+  return nil
+end
+
+---Windows of a tab that take part in its layout.
+---@param tab integer
+---@return integer[]
+function M.layout_wins(tab)
+  return vim.tbl_filter(function(win)
+    return vim.api.nvim_win_get_config(win).relative == ""
+  end, vim.api.nvim_tabpage_list_wins(tab))
+end
+
+---Open the tree at the far left of the current tab, whatever else is there.
+---@param tree_buf integer
+---@return integer win
+function M.open_tree_window(tree_buf)
+  local win = vim.api.nvim_open_win(tree_buf, true, { split = "left", win = -1 })
+  M.setup_tree_window(win)
+  return win
+end
+
+---@param win integer
+function M.setup_tree_window(win)
+  local wo = vim.wo[win][0]
+  wo.number = false
+  wo.relativenumber = false
+  wo.signcolumn = "no"
+  wo.foldcolumn = "0"
+  wo.wrap = false
+  wo.cursorline = true
+  vim.wo[win].winfixwidth = true
+end
+
+---Create the two pane windows to the right of the tree and size all three.
+---@param tree_win integer
+---@return integer before_win
+---@return integer after_win
+function M.open_panes(tree_win)
+  local empty = M.placeholder()
+  local before_win = vim.api.nvim_open_win(empty, false, {
+    split = "right",
+    win = tree_win,
+  })
+  local after_win = vim.api.nvim_open_win(empty, false, {
+    split = "right",
+    win = before_win,
+  })
+  vim.api.nvim_win_set_width(tree_win, config.options.tree_width)
+  vim.api.nvim_win_call(tree_win, function()
+    vim.cmd.wincmd("=")
+  end)
+  return before_win, after_win
 end
 
 ---Empty buffer shown where a file does not exist on one side.
@@ -97,26 +190,8 @@ function M.create(repo, before, after, tree_buf)
   vim.bo[vim.api.nvim_get_current_buf()].bufhidden = "wipe"
   vim.api.nvim_win_set_buf(tree_win, tree_buf)
 
-  local empty = M.placeholder()
-  local before_win = vim.api.nvim_open_win(empty, false, {
-    split = "right",
-    win = tree_win,
-  })
-  local after_win = vim.api.nvim_open_win(empty, false, {
-    split = "right",
-    win = before_win,
-  })
-
-  local wo = vim.wo[tree_win][0]
-  wo.number = false
-  wo.relativenumber = false
-  wo.signcolumn = "no"
-  wo.foldcolumn = "0"
-  wo.wrap = false
-  wo.cursorline = true
-  vim.wo[tree_win].winfixwidth = true
-  vim.api.nvim_win_set_width(tree_win, config.options.tree_width)
-  vim.cmd.wincmd("=")
+  M.setup_tree_window(tree_win)
+  local before_win, after_win = M.open_panes(tree_win)
 
   M.save(tab, {
     repo = repo,
@@ -125,7 +200,10 @@ function M.create(repo, before, after, tree_buf)
     wins = { tree = tree_win, before = before_win, after = after_win },
     tree_buf = tree_buf,
     collapsed = {},
+    layout = M.default_layout(),
   })
+  -- Required here, not at the top: the layout module requires this one.
+  require("twintree.layout").sync(tab)
   return tab
 end
 
@@ -161,8 +239,11 @@ end
 ---@return string? err
 function M.show(tab, entry)
   local state = M.get(tab)
-  if not state or not M.is_intact(state) then
-    return false, "the twintree layout of this tab was changed; reopen it"
+  if not state then
+    return false, M.NO_SESSION
+  end
+  if not M.has_panes(state) then
+    return false, M.BROKEN_LAYOUT
   end
 
   state.selected = entry.path

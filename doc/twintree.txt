@@ -51,7 +51,30 @@ COMMANDS                                                    *twintree-commands*
         nvim +Twintree
         nvim +"Twintree main"
 <
-    Close the tab to end the diff.
+    To end the diff, close its tab with `:tabclose`. The worktree stays
+    cached. When the diff is the only tab, as after `nvim +Twintree`,
+    `:tabclose` refuses to close the last tab; quit Neovim with `:qa`.
+
+                                                          *:TwintreeToggleTree*
+:TwintreeToggleTree
+    Hide the tree of the current diff tab, or show it again. The tree is
+    shown as the leftmost window with the width it had, and the cursor is
+    placed on the selected file. The diff keeps working while the tree is
+    hidden. Closing the tree window with `CTRL-W c` hides it as well.
+
+                                                         *:TwintreeResetLayout*
+:TwintreeResetLayout
+    Return the current diff tab to its original view: the tree, the before
+    pane and the after pane, in that order and nothing else. Every other
+    window of the tab is closed; the buffers they showed stay loaded, also
+    when they have unsaved changes. The tree gets its configured width, the
+    panes are made equally wide, and the selected file is shown again. Folded
+    directories and the selection are kept.
+
+    Use it when the tab got into a state you do not want, or when the plugin
+    reports that a pane is missing.
+
+Both commands report an error when the current tab has no diff.
 
                                                                *:TwintreeClean*
 :TwintreeClean
@@ -79,12 +102,39 @@ Before and after panes:
 
 The selected file is shown in diff mode in both panes, in full: unchanged
 lines are not folded. Use `zi` in a pane to switch folding on and see only
-the changes with context. The panes are normal windows. When you leave the selected file in a pane, for example with
-go-to-definition, diff mode is switched off in that pane, and it is switched
+the changes with context. The panes are normal windows. When you leave the
+selected file in a pane, for example with go-to-definition, diff mode is switched off in that pane, and it is switched
 on again when you return to the file.
 
 When the after side is the working tree, its buffers are the files of your
 checkout and can be edited. Files of a worktree are read-only.
+
+Windows:                                                    *twintree-windows*
+
+The diff tab is yours: resize, zoom, split and close windows as in any other
+tab. Neovim's own window commands do most of the work:
+
+    CTRL-W t    Go to the tree (the top-left window). While the tree is
+                hidden this is the before pane.
+    CTRL-W p    Go back to the window you came from.
+    CTRL-W =    Make the before and after panes equally wide. The tree
+                keeps its width.
+    CTRL-W |    Maximize the current window. CTRL-W = brings the layout
+                back: the tree at its width, the panes equally wide.
+    CTRL-W c    In the tree: hide it. See |:TwintreeToggleTree|.
+
+The plugin keeps the following:
+
+- The ratio between the before and the after pane when the terminal is
+  resized. It starts at half and half. Resizing a pane changes it, CTRL-W =
+  sets it back to half and half.
+- The width you give the tree. It is restored after a zoom. A tree squeezed
+  to one column is treated as the leftover of a zoom and widened again on the
+  next CTRL-W =, so hide the tree instead of squeezing it.
+- A maximized window is not maximized again after a terminal resize; press
+  CTRL-W | once more.
+
+|:TwintreeResetLayout| returns the tab to its original view.
 
 Highlight groups, linked by default:
 

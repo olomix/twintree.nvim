@@ -6,6 +6,24 @@ sources are in `lua/twintree/`, commands and autocommands in
 
 Run the tests with `make test`.
 
+## The layout of a diff tab is not guaranteed
+
+The plugin opens a tab with three windows (tree, before, after), but the tab
+belongs to the user. They can close, resize, split, move or replace any of
+those windows, show other buffers in them, or open unrelated windows in the
+tab. Take this into account whenever you design or change a feature:
+
+* Do not hard-rely on the layout set up when the tab was opened. Check that
+  a window or buffer from the session state is still valid, and still what
+  you expect, before using it.
+* Decide what the feature does when part of the layout is missing: work with
+  what is left, restore the missing part, or report a clear message. Never a
+  Lua traceback, and never a silent no-op the user cannot explain.
+* Prefer state that survives layout changes (the session record, buffer
+  variables) over positions and window counts.
+* Add a test for the broken-layout case of each feature that touches
+  windows.
+
 ## No personal information in the repository
 
 This is a public repository. Never write personal or machine-specific

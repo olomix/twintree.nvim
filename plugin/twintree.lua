@@ -29,6 +29,20 @@ vim.api.nvim_create_user_command("TwintreeClean", function()
   vim.notify(("twintree: removed %d cached worktree(s)"):format(removed))
 end, { desc = "Remove cached twintree worktrees of this repository" })
 
+vim.api.nvim_create_user_command("TwintreeToggleTree", function()
+  local _, err = require("twintree").toggle_tree()
+  if err then
+    report(err)
+  end
+end, { desc = "Hide or show the tree of changed files" })
+
+vim.api.nvim_create_user_command("TwintreeResetLayout", function()
+  local _, err = require("twintree").reset_layout()
+  if err then
+    report(err)
+  end
+end, { desc = "Return the diff tab to tree, before and after windows" })
+
 local group = vim.api.nvim_create_augroup("twintree", { clear = true })
 
 -- BufNew, not BufReadPre: an existing swap file is checked before reading.
@@ -53,5 +67,23 @@ vim.api.nvim_create_autocmd({ "BufWinEnter", "BufEnter" }, {
   desc = "Diff a pane only while it shows the selected file",
   callback = function()
     require("twintree.session").sync_diff()
+  end,
+})
+
+-- TabEnter: a terminal resize while another tab was current is only
+-- applied to this tab's windows when it is entered.
+vim.api.nvim_create_autocmd({ "WinResized", "VimResized", "TabEnter" }, {
+  group = group,
+  desc = "Keep the layout of a diff tab",
+  callback = function()
+    require("twintree.layout").sync()
+  end,
+})
+
+vim.api.nvim_create_autocmd("TabClosed", {
+  group = group,
+  desc = "Delete the tree buffer of a closed diff tab",
+  callback = function()
+    require("twintree.treeview").sweep()
   end,
 })
