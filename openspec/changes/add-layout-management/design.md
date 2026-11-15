@@ -183,7 +183,9 @@ its options, variables and mappings. `toggle_tree` and `reset_layout` use it.
   creates a full-height window at the far left whatever else is in the tab.
   The window options of the tree are set by a helper shared with
   `session.create`. The cursor goes to the line of the selected file.
-- `layout.sync` runs afterwards; rule 2 keeps the pane ratio.
+- `layout.reapply` runs afterwards and keeps the pane ratio and the tree
+  width. Opening the window fails when the tab has no room for it; that is
+  returned as a message.
 
 The command in `plugin/twintree.lua` reports `err` with `vim.notify` at
 error level, like `:Twintree`.

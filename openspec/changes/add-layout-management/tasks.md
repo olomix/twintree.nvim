@@ -15,7 +15,7 @@
 ## 3. Synchronization
 
 - [x] 3.1 Implement `layout.sync(tab)`: gather widths, call `decide`, perform `apply`, `restore`, `unfix` and `learn`, save the state, with a re-entry guard and early return when there is no session or a pane is missing; verify with specs in `tests/layout_ui_spec.lua` that call `sync` after `nvim_win_set_width`, `wincmd |` and `wincmd =` for: hand-set pane ratio learned, widened tree learned, pane zoom then equalize, tree zoom then equalize, nothing changed while zoomed, and `sync` in a tab without a session being a no-op
-- [x] 3.2 Register one autocommand for `WinResized`, `VimResized` and `TabEnter` calling `sync`, and call `sync` at the end of `session.create`; verify with a spec that the autocommands exist once after re-sourcing `plugin/twintree.lua` and that `nvim_exec_autocmds("WinResized")` triggers a restore after a simulated zoom
+- [x] 3.2 Register one autocommand for `WinResized`, `VimResized` and `TabEnter` calling `sync`, and record the layout at the end of `session.create` (with `reapply`, see task 6.4); verify with a spec that the autocommands exist once after re-sourcing `plugin/twintree.lua` and that `nvim_exec_autocmds("WinResized")` triggers a restore after a simulated zoom
 
 ## 4. Commands
 
@@ -34,6 +34,7 @@
 - [x] 6.1 Add a spec that runs a child Neovim in a pty, opens a diff, resizes the pty wider and narrower with `jobresize` and reads the window widths over RPC, including a resize while another tab is current; it must show the panes keeping their ratio and the tree its width, and must be skipped with a message when a pty cannot be opened
 - [x] 6.2 Run `make test` and verify the whole suite passes
 - [x] 6.3 Manual check in a real terminal: resize the terminal, zoom each of the three windows with `<C-w>|` and return with `<C-w>=`, widen the tree and zoom again, hide and show the tree, break the layout and reset it; record the result in `notes.md` of the change, without machine-specific details
+- [x] 6.4 Fixes from review: ignore a size event for widths already dealt with, so that panes squeezed by a narrow terminal are not read as a zoom (also for a diff opened in such a terminal); set the after pane width explicitly; use `layout.reapply` for layouts the plugin builds itself; rebuild a tree buffer unloaded with `:bdelete`; in reset, close windows before opening the tree, keep buffers that are set to be removed when hidden, tolerate windows closed by an autocommand, and return a message when a window cannot be opened; verify with the specs added for each case, each shown to fail on the code before its fix
 
 ## Workflow follow-up
 
