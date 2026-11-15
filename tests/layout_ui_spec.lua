@@ -185,6 +185,21 @@ describe("layout", function()
       assert.equals(0.5, state().layout.ratio)
     end)
 
+    it("recovers after a diff was opened in a narrow terminal", function()
+      vim.cmd.tabclose({ bang = true, mods = { emsg_silent = true } })
+      h.reset()
+      vim.o.columns = 30
+      tab = assert(twintree.open())
+      layout.sync(tab)
+      assert.is_false(state().layout.zoomed)
+      assert.is_true(vim.wo[tree()].winfixwidth)
+
+      resize_terminal(200)
+      layout.sync(tab)
+      assert.equals(35, (widths()))
+      assert_equal_panes()
+    end)
+
     it("leaves a zoomed window alone", function()
       api.nvim_set_current_win(state().wins.after)
       vim.cmd.wincmd("|")
@@ -555,6 +570,25 @@ describe("layout", function()
       assert.same({ "scratch" }, h.buf_lines(buf))
       assert.equals("wipe", vim.bo[buf].bufhidden)
       api.nvim_buf_delete(buf, { force = true })
+    end)
+
+    it("copes with an autocommand that closes windows on its own", function()
+      vim.cmd("botright split")
+      local companion = api.nvim_get_current_win()
+      vim.cmd("botright split")
+      local id = api.nvim_create_autocmd("WinClosed", {
+        callback = function()
+          if api.nvim_win_is_valid(companion) then
+            api.nvim_win_close(companion, true)
+          end
+        end,
+      })
+
+      local ok, result = pcall(twintree.reset_layout)
+      api.nvim_del_autocmd(id)
+      assert.is_true(ok, tostring(result))
+      assert.is_true(result)
+      assert_original_view()
     end)
 
     it("works in a tab that has no room for another window", function()

@@ -204,8 +204,10 @@ function M.create(repo, before, after, tree_buf)
     collapsed = {},
     layout = M.default_layout(),
   })
+  -- Not `sync`: in a terminal too narrow for the tree the panes come out
+  -- squeezed, which `sync` would read as a zoom made by the user.
   -- Required here, not at the top: the layout module requires this one.
-  require("twintree.layout").sync(tab)
+  require("twintree.layout").reapply(tab)
   return tab
 end
 

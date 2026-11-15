@@ -127,8 +127,8 @@ window is invalid. A module-local flag prevents re-entry while it resizes.
 
 It is called from one autocommand on `WinResized`, `VimResized` and
 `TabEnter` (the last covers a terminal resize that happened while another
-tab was current), and directly at the end of `toggle_tree`, `reset_layout`
-and `session.create`.
+tab was current). Layouts the plugin builds itself go through `reapply`,
+described below, never through `sync`.
 
 `apply` sets the tree width first, then the before width to
 `round((before + after) * ratio)`, then the after width to the rest. The
@@ -136,7 +136,7 @@ after width is set explicitly because a window of the user's between the
 panes would otherwise absorb the difference.
 
 `layout.reapply(tab)` applies the stored ratio and tree width without
-calling `decide`. `toggle_tree` and `reset_layout` use it, because the sizes
+calling `decide`. `session.create`, `toggle_tree` and `reset_layout` use it, because the sizes
 Neovim gives the windows when one is opened or closed carry no intent, and
 the tree may have been hidden without any size event (another buffer put in
 its window), in which case rule 2 would not fire.

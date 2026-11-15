@@ -89,6 +89,10 @@ end
 ---when hidden is kept hidden this once.
 ---@param win integer
 local function close_keeping_buffer(win)
+  -- An autocommand of the user may have closed it while we closed others.
+  if not vim.api.nvim_win_is_valid(win) then
+    return
+  end
   local buf = vim.api.nvim_win_get_buf(win)
   local policy = vim.bo[buf].bufhidden
   vim.bo[buf].bufhidden = "hide"
