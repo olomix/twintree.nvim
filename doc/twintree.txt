@@ -103,8 +103,9 @@ Before and after panes:
 The selected file is shown in diff mode in both panes, in full: unchanged
 lines are not folded. Use `zi` in a pane to switch folding on and see only
 the changes with context. The panes are normal windows. When you leave the
-selected file in a pane, for example with go-to-definition, diff mode is switched off in that pane, and it is switched
-on again when you return to the file.
+selected file in a pane, for example with go-to-definition, diff mode is
+switched off in that pane, and it is switched on again when you return to
+the file.
 
 When the after side is the working tree, its buffers are the files of your
 checkout and can be edited. Files of a worktree are read-only.

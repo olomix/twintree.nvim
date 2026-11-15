@@ -146,6 +146,22 @@ describe("in a real terminal", function()
     end, "after returning to 160")
   end)
 
+  pty_it("recovers from a terminal too narrow for the layout", function()
+    for _, narrow in ipairs({ 30, 40 }) do
+      resize(narrow)
+      assert(vim.wait(5000, function()
+        return lua("return vim.o.columns") == narrow
+      end, 50), "child did not see the resize")
+      -- Let the size events that follow the resize be handled.
+      vim.wait(300)
+
+      resize(200)
+      settle(function(w)
+        return w.columns == 200 and w.tree == 35 and equal_panes(w)
+      end, ("after returning from %d columns"):format(narrow))
+    end
+  end)
+
   pty_it("keeps a hand-set ratio across a resize", function()
     focus("before")
     press(":vertical resize 30<CR>")

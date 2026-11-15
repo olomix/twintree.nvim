@@ -53,7 +53,7 @@ feature may assume the three windows are still there.
 
 ### 1. Layout intent is stored in the session state
 
-`state.layout = { ratio, tree_width, columns, tree_shown, zoomed }`:
+`state.layout = { ratio, tree_width, columns, tree_shown, zoomed, seen }`:
 
 - `ratio`: before width divided by before plus after width. Starts at 0.5.
 - `tree_width`: remembered tree width. Starts at `config.options.tree_width`.
@@ -63,6 +63,7 @@ feature may assume the three windows are still there.
 - `zoomed`: whether a window was maximized at the last synchronization. A
   shrinking terminal squeezes a pane to the minimum just as a zoom does, so
   the widths after a resize cannot tell the two apart; this flag can.
+- `seen`: the widths of the three windows at the last synchronization.
 
 Sessions created before this change have no `layout`; `session.get` fills in
 the defaults, so a reload with an open diff keeps working.
@@ -85,11 +86,17 @@ Rules, first match wins:
 |---|---|---|
 | 1 | `columns` differs from stored | stored `zoomed`: only store `columns`. Otherwise `apply` stored ratio and tree width |
 | 2 | tree visibility differs from `tree_shown` | `apply` stored ratio and tree width |
+| 2a | widths equal `seen` | nothing, and `zoomed` stays as stored |
 | 3 | tree at minimum, both panes above it | `restore`: tree to remembered width, fixed on, panes 50/50, ratio 0.5 |
 | 4 | tree above minimum, both panes at minimum | `unfix`: switch the tree's `winfixwidth` off |
 | 5 | any window at minimum | nothing |
 | 6 | tree visible without `winfixwidth` | `restore` as in rule 3 |
 | 7 | otherwise | `learn`: remember tree width and pane ratio |
+
+Rule 2a makes a second event for the same sizes harmless. Without it the
+layout the plugin itself produced in a terminal too narrow for the tree, with
+the panes squeezed to the minimum, was read as a zoom by the next event and
+never restored when the terminal grew again.
 
 How the rules map to the scenarios:
 
@@ -124,14 +131,24 @@ tab was current), and directly at the end of `toggle_tree`, `reset_layout`
 and `session.create`.
 
 `apply` sets the tree width first, then the before width to
-`round((before + after) * ratio)`; the after pane takes the rest.
+`round((before + after) * ratio)`, then the after width to the rest. The
+after width is set explicitly because a window of the user's between the
+panes would otherwise absorb the difference.
+
+`layout.reapply(tab)` applies the stored ratio and tree width without
+calling `decide`. `toggle_tree` and `reset_layout` use it, because the sizes
+Neovim gives the windows when one is opened or closed carry no intent, and
+the tree may have been hidden without any size event (another buffer put in
+its window), in which case rule 2 would not fire.
 
 ### 4. The tree buffer lives as long as its tab
 
 `treeview.create_buf` uses `bufhidden = "hide"`. A `TabClosed` autocommand
 calls `treeview.sweep()`: every buffer with filetype `twintree` that is not
 the `tree_buf` of a session in an existing tab is deleted with
-`nvim_buf_delete(buf, { force = true })`. This needs no bookkeeping about
+`nvim_buf_delete(buf, { force = true })`. (As implemented the buffers are
+recognized by their name prefix `twintree://tree/`, since a tree buffer
+unloaded with `:bdelete` has lost its filetype.) This needs no bookkeeping about
 which tab a buffer belonged to and also removes buffers left by a crash of a
 previous sweep.
 
@@ -149,8 +166,11 @@ returns an error string that names `:TwintreeResetLayout`.
 only a valid tree buffer.
 
 `treeview.ensure_buf(tab)` returns the session's tree buffer, re-creating it
-and recomputing the entries with `git.changed_files` when the buffer was
-deleted by the user. `toggle_tree` and `reset_layout` use it.
+and recomputing the entries with `git.changed_files` when the buffer is no
+longer a working tree buffer. That is checked with `treeview.is_tree_buf`:
+valid, loaded and still of filetype `twintree`. Validity alone is not
+enough, because `:bdelete` leaves the buffer valid but unloaded and without
+its options, variables and mappings. `toggle_tree` and `reset_layout` use it.
 
 ### 6. `:TwintreeToggleTree`
 
@@ -173,15 +193,20 @@ error level, like `:Twintree`.
 `require("twintree").reset_layout()` returns `true` or `nil, err`.
 
 1. No session: `nil, "no diff session in this tab"`.
-2. Open a new far-left window with the tree buffer, as in decision 6.
-3. Close every other non-floating window of the tab with
-   `nvim_win_close(win, true)`. Forced closing hides a modified buffer
-   instead of failing; nothing is discarded.
+2. Close every non-floating window of the tab but one. A tab filled with
+   splits has no room for another window, so the tree cannot be opened
+   first.
+3. Open a new far-left window with the tree buffer, as in decision 6, then
+   close the remaining old window. Windows are closed with
+   `nvim_win_close(win, true)`, which hides a modified buffer instead of
+   failing. A buffer whose `bufhidden` would remove it is set to `hide` for
+   the moment of closing and gets its setting back afterwards, so nothing is
+   discarded. Failing to open a window is returned as a message.
 4. Create the before and after windows to the right, as `session.create`
    does. The window-building part of `session.create` is extracted into a
    function used by both.
-5. Store the new window ids, set `layout` to ratio 0.5, the configured tree
-   width and the current `columns`, and clear the tree's zoom state.
+5. Store the new window ids, set `layout` to its defaults and `reapply`
+   it.
 6. When a file is selected and still listed, `session.show` it; otherwise
    leave the placeholders and keep the cursor in the tree.
 

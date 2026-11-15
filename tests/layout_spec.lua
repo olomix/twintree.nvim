@@ -63,6 +63,41 @@ describe("layout.decide", function()
     assert.equals("apply", kind(35, 62, 61, { layout = { tree_shown = false } }))
   end)
 
+  describe("with the widths of the last synchronization", function()
+    local function seen(tree, before, after, zoomed)
+      return {
+        layout = { zoomed = zoomed, seen = { tree = tree, before = before, after = after } },
+      }
+    end
+
+    it("does nothing and keeps the zoom state", function()
+      -- Panes squeezed by a narrow terminal, not by the user.
+      local action = layout.decide(input(26, 1, 1, seen(26, 1, 1, false)))
+      assert.same({ kind = "none", zoomed = false }, action)
+      action = layout.decide(input(35, 2, 1, seen(35, 2, 1, false)))
+      assert.same({ kind = "none", zoomed = false }, action)
+      action = layout.decide(input(1, 1, 156, seen(1, 1, 156, true)))
+      assert.same({ kind = "none", zoomed = true }, action)
+      action = layout.decide(input(nil, 1, 158, seen(nil, 1, 158, false)))
+      assert.same({ kind = "none", zoomed = false }, action)
+    end)
+
+    it("still reacts when one width changed", function()
+      assert.equals("restore", kind(1, 78, 79, seen(1, 1, 156, true)))
+      assert.equals("unfix", kind(26, 1, 1, seen(26, 1, 2, false)))
+      assert.equals("learn", kind(35, 40, 83, seen(35, 62, 61, false)))
+    end)
+
+    it("still applies after a terminal resize or a change of the tree", function()
+      local same = seen(35, 62, 61, false)
+      same.columns = 200
+      assert.equals("apply", kind(35, 62, 61, same))
+      same = seen(nil, 79, 80, false)
+      same.layout.tree_shown = true
+      assert.equals("apply", kind(nil, 79, 80, same))
+    end)
+  end)
+
   it("restores the tree left squeezed by equalizing after a pane zoom", function()
     assert.equals("restore", kind(1, 78, 79))
   end)

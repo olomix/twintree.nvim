@@ -6,6 +6,8 @@ local M = {}
 
 local ns = vim.api.nvim_create_namespace("twintree")
 
+M.NAME_PREFIX = "twintree://tree/"
+
 local hl_links = {
   TwintreeAdded = "Added",
   TwintreeModified = "Changed",
@@ -29,7 +31,7 @@ function M.create_buf()
   vim.bo[buf].bufhidden = "hide"
   vim.bo[buf].modifiable = false
   vim.bo[buf].filetype = "twintree"
-  vim.api.nvim_buf_set_name(buf, "twintree://tree/" .. buf)
+  vim.api.nvim_buf_set_name(buf, M.NAME_PREFIX .. buf)
 
   -- Callbacks require the module at call time to pick up reloaded code.
   vim.keymap.set("n", "<CR>", function()
@@ -39,6 +41,16 @@ function M.create_buf()
     require("twintree.treeview").refresh()
   end, { buffer = buf, desc = "Twintree: refresh changed files" })
   return buf
+end
+
+---Whether a buffer is a working tree buffer. `:bdelete` leaves the buffer
+---valid but unloaded, without its filetype, mappings and entries.
+---@param buf integer
+---@return boolean
+function M.is_tree_buf(buf)
+  return vim.api.nvim_buf_is_valid(buf)
+    and vim.api.nvim_buf_is_loaded(buf)
+    and vim.bo[buf].filetype == "twintree"
 end
 
 ---@param buf integer
@@ -74,7 +86,7 @@ end
 ---@param tab? integer
 function M.draw(tab)
   local state = session.get(tab)
-  if not state or not vim.api.nvim_buf_is_valid(state.tree_buf) then
+  if not state or not M.is_tree_buf(state.tree_buf) then
     return
   end
   define_highlights()
@@ -179,13 +191,17 @@ function M.ensure_buf(tab)
   if not state then
     return nil, session.NO_SESSION
   end
-  if vim.api.nvim_buf_is_valid(state.tree_buf) then
+  if M.is_tree_buf(state.tree_buf) then
     return state.tree_buf
   end
   local entries, err =
     git.changed_files(state.repo, state.before.commit, state.after.commit)
   if not entries then
     return nil, err
+  end
+  if vim.api.nvim_buf_is_valid(state.tree_buf) then
+    -- What `:bdelete` left behind.
+    vim.api.nvim_buf_delete(state.tree_buf, { force = true })
   end
   state.tree_buf = M.create_buf()
   session.save(tab, state)
@@ -215,7 +231,7 @@ end
 ---@return twintree.Entry?
 function M.entry(tab, path)
   local state = session.get(tab)
-  if not state or not vim.api.nvim_buf_is_valid(state.tree_buf) then
+  if not state or not M.is_tree_buf(state.tree_buf) then
     return nil
   end
   for _, entry in ipairs(entries_of(state.tree_buf)) do
@@ -236,10 +252,11 @@ function M.sweep()
     end
   end
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    -- By name: a tree buffer unloaded with `:bdelete` has no filetype.
     if
       not live[buf]
       and vim.api.nvim_buf_is_valid(buf)
-      and vim.bo[buf].filetype == "twintree"
+      and vim.startswith(vim.api.nvim_buf_get_name(buf), M.NAME_PREFIX)
     then
       vim.api.nvim_buf_delete(buf, { force = true })
     end

@@ -51,6 +51,18 @@ function M.decide(input)
   if tree_shown ~= stored.tree_shown then
     return { kind = "apply", zoomed = false }
   end
+  -- Widths we already dealt with carry no new information. Without this a
+  -- second event for the same sizes would read a layout the plugin itself
+  -- produced, such as panes squeezed by a narrow terminal, as a zoom.
+  local seen = stored.seen
+  if
+    seen
+    and seen.tree == input.tree
+    and seen.before == input.before
+    and seen.after == input.after
+  then
+    return { kind = "none", zoomed = stored.zoomed == true }
+  end
   -- What `<C-w>=` leaves after a pane was maximized: the fixed-width tree
   -- stays squeezed while the panes are equalized.
   if tree_squeezed and not squeezed(input.before) and not squeezed(input.after) then
@@ -94,15 +106,43 @@ local function apply(state, tree_win)
   end
   local before, after = state.wins.before, state.wins.after
   local avail = vim.api.nvim_win_get_width(before) + vim.api.nvim_win_get_width(after)
-  vim.api.nvim_win_set_width(before, M.before_width(avail, layout.ratio))
+  local before_width = M.before_width(avail, layout.ratio)
+  vim.api.nvim_win_set_width(before, before_width)
+  -- Set explicitly: with a window of the user's between the panes, the
+  -- columns would otherwise be taken from that window.
+  vim.api.nvim_win_set_width(after, avail - before_width)
+end
+
+---Record what the tab looks like now, to compare the next change against.
+local function remember(state, tree_win, zoomed)
+  local layout = state.layout
+  layout.columns = vim.o.columns
+  layout.tree_shown = tree_win ~= nil
+  layout.zoomed = zoomed
+  layout.seen = {
+    tree = tree_win and vim.api.nvim_win_get_width(tree_win) or nil,
+    before = vim.api.nvim_win_get_width(state.wins.before),
+    after = vim.api.nvim_win_get_width(state.wins.after),
+  }
 end
 
 local syncing = false
 
+---Run `fn` without `sync` reacting to the size changes it makes.
+local function guarded(fn)
+  syncing = true
+  local ok, err = pcall(fn)
+  syncing = false
+  if not ok then
+    error(err, 0)
+  end
+end
+
 ---Bring the window sizes of a diff tab in line with the stored layout, or
 ---learn from them, after anything changed the sizes.
 ---@param tab? integer
----@return string? kind the action taken, nil when there was nothing to do
+---@return string? kind the action taken, "none" included; nil when the tab
+---  has no session, a pane is missing or a synchronization is running
 function M.sync(tab)
   tab = tab or vim.api.nvim_get_current_tabpage()
   if syncing then
@@ -124,8 +164,7 @@ function M.sync(tab)
     min = math.max(1, vim.o.winminwidth),
   })
 
-  syncing = true
-  local ok, err = pcall(function()
+  guarded(function()
     if action.kind == "learn" then
       state.layout.ratio = action.ratio
       state.layout.tree_width = action.tree_width
@@ -138,16 +177,27 @@ function M.sync(tab)
       apply(state, tree_win)
     end
   end)
-  syncing = false
 
-  state.layout.columns = vim.o.columns
-  state.layout.tree_shown = tree_win ~= nil
-  state.layout.zoomed = action.zoomed
+  remember(state, tree_win, action.zoomed)
   session.save(tab, state)
-  if not ok then
-    error(err, 0)
-  end
   return action.kind
+end
+
+---Set the windows to the stored ratio and tree width, whatever their sizes
+---are now. For changes the plugin makes itself, where the sizes that result
+---from opening or closing a window mean nothing.
+---@param tab integer
+function M.reapply(tab)
+  local state = session.get(tab)
+  if not state or not session.has_panes(state) then
+    return
+  end
+  local tree_win = session.tree_win(state)
+  guarded(function()
+    apply(state, tree_win)
+  end)
+  remember(state, tree_win, false)
+  session.save(tab, state)
 end
 
 return M

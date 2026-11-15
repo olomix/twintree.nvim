@@ -25,6 +25,8 @@ local M = {}
 ---@field columns integer terminal width at the last synchronization
 ---@field tree_shown boolean whether the tree was visible at that time
 ---@field zoomed boolean whether a window was maximized at that time
+---@field seen? { tree?: integer, before: integer, after: integer } widths
+---  at that time
 
 local PANES = { "before", "after" }
 

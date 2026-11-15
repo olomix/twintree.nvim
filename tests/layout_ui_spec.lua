@@ -154,6 +154,37 @@ describe("layout", function()
       assert.is_false(state().layout.zoomed)
     end)
 
+    -- Each resize is followed by a second size event for the same widths.
+    for _, narrow in ipairs({ 30, 40 }) do
+      it(("recovers from a terminal only %d columns wide"):format(narrow), function()
+        resize_terminal(narrow)
+        layout.sync(tab)
+        assert.is_false(state().layout.zoomed)
+        assert.is_true(vim.wo[tree()].winfixwidth)
+
+        resize_terminal(200)
+        layout.sync(tab)
+        assert.equals(35, (widths()))
+        assert_equal_panes()
+        assert.equals(0.5, state().layout.ratio)
+      end)
+    end
+
+    it("leaves a window of the user between the panes alone", function()
+      local extra = api.nvim_open_win(api.nvim_create_buf(false, true), false, {
+        split = "right",
+        win = state().wins.before,
+      })
+      vim.cmd.wincmd("=")
+      layout.sync(tab)
+      local width = api.nvim_win_get_width(extra)
+
+      resize_terminal(220)
+      assert.equals(width, api.nvim_win_get_width(extra))
+      assert_equal_panes()
+      assert.equals(0.5, state().layout.ratio)
+    end)
+
     it("leaves a zoomed window alone", function()
       api.nvim_set_current_win(state().wins.after)
       vim.cmd.wincmd("|")
@@ -333,6 +364,53 @@ describe("layout", function()
       assert.equals(s.tree_buf, api.nvim_win_get_buf(tree()))
     end)
 
+    it("rebuilds a tree whose buffer was unloaded with :bdelete", function()
+      select("a.txt")
+      local old = state().tree_buf
+      local lines = h.buf_lines(old)
+      vim.cmd.bdelete(old)
+      assert.is_true(api.nvim_buf_is_valid(old))
+      assert.is_nil(session.tree_win(state()))
+
+      assert.is_true(twintree.toggle_tree())
+      local s = state()
+      assert.are_not.equal(old, s.tree_buf)
+      assert.is_false(api.nvim_buf_is_valid(old))
+      assert.same(lines, h.buf_lines(s.tree_buf))
+      assert.equals("twintree", vim.bo[s.tree_buf].filetype)
+      assert.equals("nofile", vim.bo[s.tree_buf].buftype)
+      assert.equals("M a.txt", api.nvim_get_current_line())
+
+      h.goto_line(tree(), "b.txt")
+      h.keys("<CR>")
+      assert.equals("src/b.txt", state().selected)
+    end)
+
+    it("shows the tree at its width when it was hidden without a size change", function()
+      local other = api.nvim_create_buf(false, true)
+      api.nvim_win_set_buf(tree(), other)
+      assert.is_nil(session.tree_win(state()))
+      assert.is_true(state().layout.tree_shown)
+
+      assert.is_true(twintree.toggle_tree())
+      assert.equals(35, api.nvim_win_get_width(tree()))
+      assert.equals(35, state().layout.tree_width)
+      assert.equals(0.5, state().layout.ratio)
+      assert_equal_panes()
+    end)
+
+    it("reports a tab with no room for the tree", function()
+      assert(twintree.toggle_tree())
+      while pcall(vim.cmd.vsplit) do
+      end
+      local count = #api.nvim_tabpage_list_wins(tab)
+
+      local ok, err = twintree.toggle_tree()
+      assert.is_nil(ok)
+      assert.truthy(err:find("no room for the tree window", 1, true))
+      assert.equals(count, #api.nvim_tabpage_list_wins(tab))
+    end)
+
     it("refuses to close the tree when it is the only window", function()
       local s = state()
       api.nvim_win_close(s.wins.before, true)
@@ -354,16 +432,11 @@ describe("layout", function()
       assert.equals(35, api.nvim_win_get_width(tree))
       assert.is_true(vim.wo[tree].winfixwidth)
       assert_equal_panes()
-      assert.same(
-        {
-          ratio = 0.5,
-          tree_width = 35,
-          columns = vim.o.columns,
-          tree_shown = true,
-          zoomed = false,
-        },
-        s.layout
-      )
+      assert.equals(0.5, s.layout.ratio)
+      assert.equals(35, s.layout.tree_width)
+      assert.equals(vim.o.columns, s.layout.columns)
+      assert.is_true(s.layout.tree_shown)
+      assert.is_false(s.layout.zoomed)
       return s
     end
 
@@ -459,6 +532,42 @@ describe("layout", function()
       assert_original_view()
       assert_showing("a.txt")
     end)
+
+    it("rebuilds a tree whose buffer was unloaded with :bdelete", function()
+      select("a.txt")
+      vim.cmd.bdelete(state().tree_buf)
+
+      assert.is_true(twintree.reset_layout())
+      assert_original_view()
+      assert_showing("a.txt")
+    end)
+
+    it("keeps a buffer that is set to be wiped when hidden", function()
+      vim.cmd("botright new")
+      local buf = api.nvim_get_current_buf()
+      vim.bo[buf].buftype = "nofile"
+      vim.bo[buf].bufhidden = "wipe"
+      api.nvim_buf_set_lines(buf, 0, -1, false, { "scratch" })
+
+      assert.is_true(twintree.reset_layout())
+      assert_original_view()
+      assert.is_true(api.nvim_buf_is_valid(buf))
+      assert.same({ "scratch" }, h.buf_lines(buf))
+      assert.equals("wipe", vim.bo[buf].bufhidden)
+      api.nvim_buf_delete(buf, { force = true })
+    end)
+
+    it("works in a tab that has no room for another window", function()
+      select("a.txt")
+      api.nvim_set_current_win(state().wins.after)
+      while pcall(vim.cmd.vsplit) do
+      end
+      assert.is_false(pcall(vim.cmd.vsplit))
+
+      assert.is_true(twintree.reset_layout())
+      assert_original_view()
+      assert_showing("a.txt")
+    end)
   end)
 
   describe("commands", function()
@@ -511,6 +620,15 @@ describe("layout", function()
     it("is deleted when its tab closes", function()
       local second, buf = open_second()
       api.nvim_set_current_tabpage(second)
+      vim.cmd.tabclose()
+      assert.is_false(api.nvim_buf_is_valid(buf))
+    end)
+
+    it("is deleted with its tab after :bdelete unloaded it", function()
+      local second, buf = open_second()
+      api.nvim_set_current_tabpage(second)
+      vim.cmd.bdelete(buf)
+      assert.is_true(api.nvim_buf_is_valid(buf))
       vim.cmd.tabclose()
       assert.is_false(api.nvim_buf_is_valid(buf))
     end)

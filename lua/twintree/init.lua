@@ -85,6 +85,33 @@ function M.clean()
   return require("twintree.worktree").clean(repo, in_use)
 end
 
+---Close a window without losing its buffer: a buffer set to be removed
+---when hidden is kept hidden this once.
+---@param win integer
+local function close_keeping_buffer(win)
+  local buf = vim.api.nvim_win_get_buf(win)
+  local policy = vim.bo[buf].bufhidden
+  vim.bo[buf].bufhidden = "hide"
+  -- Forced, so that a modified buffer is hidden instead of blocking.
+  pcall(vim.api.nvim_win_close, win, true)
+  if vim.api.nvim_buf_is_valid(buf) then
+    vim.bo[buf].bufhidden = policy
+  end
+end
+
+---Open the tree window, reporting a tab that has no room for it.
+---@param buf integer
+---@return integer? win
+---@return string? err
+local function open_tree(buf)
+  local session = require("twintree.session")
+  local ok, win = pcall(session.open_tree_window, buf)
+  if not ok then
+    return nil, "no room for the tree window: " .. tostring(win)
+  end
+  return win
+end
+
 ---Hide the tree of the current diff tab, or show it again.
 ---@return boolean? ok
 ---@return string? err
@@ -111,13 +138,17 @@ function M.toggle_tree()
     if not buf then
       return nil, err
     end
-    win = session.open_tree_window(buf)
+    win, err = open_tree(buf)
+    if not win then
+      return nil, err
+    end
     state = assert(session.get(tab))
     state.wins.tree = win
     session.save(tab, state)
     treeview.focus_selected(tab, win)
   end
-  layout.sync(tab)
+  -- Not `sync`: the sizes Neovim gave the windows here mean nothing.
+  layout.reapply(tab)
   return true
 end
 
@@ -140,14 +171,24 @@ function M.reset_layout()
     return nil, err
   end
 
+  -- Close all but one window first: a tab filled with splits has no room
+  -- for another one. The last one goes once the tree window exists.
   local old_wins = session.layout_wins(tab)
-  -- A new window, not one of the old ones: those belong to the user.
-  local tree_win = session.open_tree_window(buf)
+  local last = table.remove(old_wins)
   for _, win in ipairs(old_wins) do
-    -- Forced, so that a modified buffer is hidden instead of blocking.
-    pcall(vim.api.nvim_win_close, win, true)
+    close_keeping_buffer(win)
   end
-  local before_win, after_win = session.open_panes(tree_win)
+  -- A new window, not the remaining old one: that belongs to the user.
+  local tree_win
+  tree_win, err = open_tree(buf)
+  if not tree_win then
+    return nil, err
+  end
+  close_keeping_buffer(last)
+  local ok, before_win, after_win = pcall(session.open_panes, tree_win)
+  if not ok then
+    return nil, "no room for the panes: " .. tostring(before_win)
+  end
 
   local state = assert(session.get(tab))
   state.wins = { tree = tree_win, before = before_win, after = after_win }
@@ -164,7 +205,7 @@ function M.reset_layout()
   end
   treeview.draw(tab)
   treeview.focus_selected(tab, tree_win)
-  layout.sync(tab)
+  layout.reapply(tab)
   return true
 end
 
