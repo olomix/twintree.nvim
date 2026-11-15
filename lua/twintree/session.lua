@@ -370,12 +370,25 @@ function M.entry_path(state, pair)
       rel[pane] = side == pane and path or nil
     end
   end
-  for _, entry in ipairs(entries_of(state)) do
-    if rel.after and entry.path == rel.after then
-      return entry.path
-    end
-    if rel.before and (entry.old_path or entry.path) == rel.before then
-      return entry.path
+  local entries = entries_of(state)
+  -- In this order: a file can be renamed while a new one takes its old
+  -- path, and then two entries share that path.
+  local matches = {
+    function(entry)
+      return rel.after and entry.path == rel.after
+    end,
+    function(entry)
+      return rel.before and entry.old_path == rel.before
+    end,
+    function(entry)
+      return rel.before and not entry.old_path and entry.path == rel.before
+    end,
+  }
+  for _, match in ipairs(matches) do
+    for _, entry in ipairs(entries) do
+      if match(entry) then
+        return entry.path
+      end
     end
   end
   return nil
@@ -393,19 +406,27 @@ local function pane_of(state, win)
   return nil
 end
 
----Take a buffer that no window shows out of the diff. Neovim keeps a
----buffer that was hidden in a diff window as a participant, which would
----make the next pair a three-way diff.
+---Take a buffer out of the diff of a tab, unless a diff window there still
+---shows it. Neovim keeps a buffer that left a diff window as a participant,
+---which would make the next pair a three-way diff.
+---@param tab integer
 ---@param buf integer
-local function leave_diff(buf)
-  if
-    vim.api.nvim_buf_is_loaded(buf)
-    and #vim.fn.win_findbuf(buf) == 0
-  then
+local function leave_diff(tab, buf)
+  if not vim.api.nvim_buf_is_loaded(buf) then
+    return
+  end
+  local wins = vim.api.nvim_tabpage_list_wins(tab)
+  for _, win in ipairs(wins) do
+    if vim.wo[win].diff and vim.api.nvim_win_get_buf(win) == buf then
+      return
+    end
+  end
+  -- The diff belongs to a tab; run the command in this one.
+  vim.api.nvim_win_call(wins[1], function()
     vim.api.nvim_buf_call(buf, function()
       vim.cmd("diffoff")
     end)
-  end
+  end)
 end
 
 ---@param path? string
@@ -462,7 +483,7 @@ function M.show_pair(tab, pair, opts)
     end
   end
   for _, pane in ipairs(PANES) do
-    leave_diff(replaced[pane] or state.bufs[pane])
+    leave_diff(tab, replaced[pane] or state.bufs[pane])
   end
   for _, pane in ipairs(PANES) do
     set_diff(state.wins[pane], true)
@@ -538,6 +559,8 @@ local function move_to_own_pane(tab, win, buf)
   if
     not state
     or not M.has_panes(state)
+    -- A layout reset in between closes it and leaves valid new panes.
+    or not vim.api.nvim_win_is_valid(win)
     or not vim.api.nvim_buf_is_valid(buf)
     or vim.api.nvim_win_get_buf(win) ~= buf
   then

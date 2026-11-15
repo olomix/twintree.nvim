@@ -215,6 +215,19 @@ describe("following", function()
       )
     end)
 
+    it("finds the entry of a rename whose old path a new file took", function()
+      local s = state()
+      vim.b[s.tree_buf].twintree_entries = {
+        { path = "a.txt", status = "A" },
+        { path = "z.txt", old_path = "a.txt", status = "R" },
+      }
+      local renamed = { before = before_path("a.txt"), after = after_path("z.txt") }
+      assert.equals("z.txt", session.entry_path(s, renamed))
+      assert.equals("z.txt", session.entry_path(s, { before = before_path("a.txt") }))
+      local added = { before = before_path("a.txt"), after = after_path("a.txt") }
+      assert.equals("a.txt", session.entry_path(s, added))
+    end)
+
     it("finds the tree entry of a pair", function()
       local s = state()
       local function entry_of(path)
@@ -428,6 +441,44 @@ describe("following", function()
     assert.same({ 2 }, changed_lines())
   end)
 
+  describe("a buffer that left a pane", function()
+    it("leaves the diff while a window split off the pane shows it", function()
+      local s = state()
+      api.nvim_set_current_win(s.wins.before)
+      vim.cmd.split()
+      assert.equals(before_path("a.txt"), name(api.nvim_get_current_win()))
+
+      edit("before", before_path("same.txt"))
+      assert_panes(before_path("same.txt"), after_path("same.txt"))
+      assert.is_false(has_changes(s.wins.before))
+      assert.is_false(has_changes(s.wins.after))
+    end)
+
+    it("leaves the diff while another tab shows it", function()
+      local s = state()
+      vim.cmd.tabnew()
+      vim.cmd.edit(after_path("a.txt"))
+      api.nvim_set_current_tabpage(tab)
+
+      edit("after", after_path("same.txt"))
+      assert_panes(before_path("same.txt"), after_path("same.txt"))
+      assert.is_false(has_changes(s.wins.before))
+      assert.is_false(has_changes(s.wins.after))
+    end)
+
+    it("stays in a diff the user set up in a window of their own", function()
+      local s = state()
+      api.nvim_set_current_win(s.wins.after)
+      vim.cmd.split()
+      vim.cmd.diffthis()
+      local own = api.nvim_get_current_win()
+
+      edit("after", after_path("same.txt"))
+      assert.is_true(vim.wo[own].diff)
+      assert.equals(after_path("a.txt"), name(own))
+    end)
+  end)
+
   it("leaves another diff tab alone", function()
     local first = tab
     tab = assert(twintree.open())
@@ -487,6 +538,16 @@ describe("following", function()
 
       assert.equals(before_path("a.txt"), name(s.wins.before))
       assert.equals("", vim.v.errmsg)
+    end)
+
+    it("gives up when a layout reset replaced the windows in between", function()
+      vim.v.errmsg = ""
+      edit("after", before_path("same.txt"))
+      assert.is_true(twintree.reset_layout())
+      vim.wait(50)
+
+      assert.equals("", vim.v.errmsg)
+      assert.equals(3, #api.nvim_tabpage_list_wins(tab))
     end)
 
     it("gives up when the window shows another buffer by then", function()

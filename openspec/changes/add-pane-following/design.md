@@ -160,10 +160,13 @@ cached worktree is not made read-only.
 
 ### Buffers that leave the panes leave the diff
 
-After a pair is replaced, each buffer of the old pair that no window shows
-any more is taken out of the diff (`:diffoff` run for that buffer).
-Otherwise Neovim keeps it as a hidden participant and the new pair is
-diffed three ways. A buffer that some window still shows is left alone.
+After a pair is replaced, each buffer of the old pair is taken out of the
+diff of the tab (`:diffoff` run for that buffer in that tab). Otherwise
+Neovim keeps it as a participant and the new pair is diffed three ways.
+That it is still visible does not matter: a window split off the pane, or
+a window in another tab, can show it without diff mode. Only a buffer that
+a diff window of the tab still shows is left alone, which is a diff the
+user set up.
 
 ### New windows of a diff tab leave diff mode
 

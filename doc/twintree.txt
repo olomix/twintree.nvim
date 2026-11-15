@@ -68,8 +68,9 @@ COMMANDS                                                    *twintree-commands*
     pane and the after pane, in that order and nothing else. Every other
     window of the tab is closed; the buffers they showed stay loaded, also
     when they have unsaved changes. The tree gets its configured width, the
-    panes are made equally wide, and the selected file is shown again. Folded
-    directories and the selection are kept.
+    panes are made equally wide, and the file the panes compared is shown
+    again, also when it is not one of the changed files. Folded directories
+    are kept.
 
     Use it when the tab got into a state you do not want, or when the plugin
     reports that a pane is missing.
@@ -102,10 +103,29 @@ Before and after panes:
 
 The selected file is shown in diff mode in both panes, in full: unchanged
 lines are not folded. Use `zi` in a pane to switch folding on and see only
-the changes with context. The panes are normal windows. When you leave the
-selected file in a pane, for example with go-to-definition, diff mode is
-switched off in that pane, and it is switched on again when you return to
-the file.
+the changes with context.
+
+                                                              *twintree-follow*
+The panes are normal windows, and they stay a diff wherever you go. When a
+file enters one pane, for example with go-to-definition, a quickfix entry or
+`:edit`, the other pane shows the same file from its side:
+
+    - A file that did not change is shown on both sides without differences.
+      A file that is one of the changed files is marked in the tree.
+    - A file always goes to the pane of its side. A file of the before side
+      opened while the cursor is in the after pane appears in the before
+      pane, and the cursor goes with it.
+    - A file outside both sides, such as a dependency, is shown in both
+      panes.
+    - A file that does not exist on the other side is shown next to an empty
+      pane.
+    - A buffer that is not a file, such as a terminal, gets a plain pane.
+
+The tree window only shows the tree: `:edit` there is refused by
+'winfixbuf', and a quickfix entry opened from it goes to the panes.
+
+To keep another file next to the diff, open a window of your own with
+`:split`. Such a window does not follow and is not part of the diff.
 
 When the after side is the working tree, its buffers are the files of your
 checkout and can be edited. Files of a worktree are read-only.
