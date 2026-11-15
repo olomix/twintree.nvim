@@ -16,11 +16,14 @@ end
 
 describe("swap.describe", function()
   it("lays the facts out like Neovim's message", function()
-    local text = swap.describe("/swap/a.txt.swp", info(), "/project/a.txt", 1700000100)
+    local text = swap.describe("/swap/a.txt.swp", info(), "/project/a.txt", {
+      swap = 1700000050,
+      file = 1700000100,
+    })
     assert.same({
       "E325: ATTENTION",
       'Found a swap file by the name "/swap/a.txt.swp"',
-      "          owned by: someone   dated: " .. os.date("%a %b %d %H:%M:%S %Y", 1700000000),
+      "          owned by: someone   dated: " .. os.date("%a %b %d %H:%M:%S %Y", 1700000050),
       "         file name: ~/project/a.txt",
       "          modified: no",
       "         user name: someone   host name: machine",
@@ -28,6 +31,13 @@ describe("swap.describe", function()
       'While opening file "/project/a.txt"',
       "             dated: " .. os.date("%a %b %d %H:%M:%S %Y", 1700000100),
     }, vim.split(text, "\n"))
+  end)
+
+  it("dates the swap file by its own time, not by when the file was saved", function()
+    local old_save, today = 1600000000, 1700000050
+    local text = swap.describe("s.swp", info({ mtime = old_save }), "/p/a.txt", { swap = today })
+    assert.truthy(text:find("dated: " .. os.date("%a %b %d %H:%M:%S %Y", today), 1, true))
+    assert.is_nil(text:find(os.date("%a %b %d %H:%M:%S %Y", old_save), 1, true))
   end)
 
   it("says when the process is still running", function()

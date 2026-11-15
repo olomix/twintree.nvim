@@ -67,6 +67,9 @@ end
 ---behind as after a crash.
 ---@return integer job
 function M.swap_owner(path, swap_dir, kill)
+  -- Written by the child after its edit is in the swap file: the swap file
+  -- itself exists before that, as soon as the file is loaded.
+  local preserved = vim.fn.tempname()
   local job = vim.fn.jobstart({
     vim.v.progpath,
     "--headless",
@@ -79,10 +82,13 @@ function M.swap_owner(path, swap_dir, kill)
     "normal! ix",
     "-c",
     "preserve",
+    "-c",
+    ("call writefile([], '%s')"):format(preserved),
   })
   assert(job > 0, "could not start a second Neovim")
   assert(vim.wait(5000, function()
-    return #vim.fn.glob(swap_dir .. "/*", true, true) > 0
+    return vim.uv.fs_stat(preserved) ~= nil
+      and #vim.fn.glob(swap_dir .. "/*", true, true) > 0
   end, 20), "the second Neovim wrote no swap file")
   if kill then
     vim.uv.kill(vim.fn.jobpid(job), "sigkill")

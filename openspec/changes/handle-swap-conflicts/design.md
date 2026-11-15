@@ -76,9 +76,12 @@ plugin's autocommand again, later.
 
 ### 3. The prompt
 
-`swap.describe(swapname, info, path, file_mtime)` is pure: from the name of
-the swap file and the table that `swapinfo()` returns it builds the text,
-in the layout of Neovim's message:
+`swap.describe(swapname, info, path, dates)` is pure: from the name of the
+swap file, the table that `swapinfo()` returns and the modification times
+of the swap file and of the file, it builds the text, in the layout of
+Neovim's message. The date after "owned by" is the swap file's own
+modification time, as in Neovim's message; the `mtime` that `swapinfo()`
+returns is when the edited file was last saved.
 
 ```
 E325: ATTENTION
@@ -155,7 +158,10 @@ Two things the implementation showed:
 A jump fires its events more than once, and each would ask again. The
 session therefore records, per pane, the buffer whose counterpart was
 declined (`declined`); `follow` leaves that buffer alone until the pane
-shows another one. Going back to the file later asks again, and so does
+shows another one. `move_to_own_pane` checks the same record: for a file
+that landed in the pane of the other side, one jump queues that move
+several times, and after a declined counterpart the file is still where it
+landed. Going back to the file later asks again, and so does
 selecting it in the tree.
 
 Abort and Quit give the same result for a jump: the pane keeps the file the
@@ -165,8 +171,10 @@ counterpart, not the user's own command, which had already completed.
 Callers: `session.show` already returns the error to the tree's key
 handler, which reports it. `session.follow` and `move_to_own_pane` report
 it themselves with `vim.notify`. `reset_layout` reports it as well and
-completes with the layout rebuilt and the panes empty or showing what could
-be opened.
+completes with the layout rebuilt and the panes empty. It records the empty
+panes before it tries to show the pair again, so that a pair that cannot be
+shown leaves no recorded pair and no mark in the tree; the cursor then stays
+in the tree.
 
 Alternative: load both files first in a hidden window and only then touch
 the panes. Rejected: it needs a throwaway window in the user's tab, and

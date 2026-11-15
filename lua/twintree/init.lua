@@ -224,17 +224,23 @@ function M.reset_layout()
   if not state then
     return nil, GONE
   end
+  local pair = state.pair
   state.wins = { tree = tree_win, before = before_win, after = after_win }
   state.layout = session.default_layout()
-  state.bufs = nil
+  -- The new panes are empty. Recorded as such, so that a pair that cannot
+  -- be shown again leaves no pair and no mark in the tree behind.
+  state.pair, state.selected, state.bufs = nil, nil, nil
   session.save(tab, state)
 
-  if state.pair then
-    local shown, show_err = session.show_pair(tab, state.pair)
+  local shown, show_err = false, nil
+  if pair then
+    shown, show_err = session.show_pair(tab, pair)
     if not shown then
       -- The layout is rebuilt either way; only the file is missing.
       vim.notify("twintree: " .. show_err, vim.log.levels.ERROR)
     end
+  end
+  if shown then
     vim.api.nvim_set_current_win(after_win)
   else
     session.clear_selection(tab)

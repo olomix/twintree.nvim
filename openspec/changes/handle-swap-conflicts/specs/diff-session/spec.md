@@ -28,8 +28,9 @@ anyway, Recover, Delete it, Quit and Abort. Neovim SHALL apply the choice.
 
 #### Scenario: What the prompt shows
 - **WHEN** the prompt is shown
-- **THEN** it names the swap file, its owner and date, the file, whether it
-  was modified, the user and host it belongs to, and the file being opened
+- **THEN** it names the swap file, its owner, the time the swap file was
+  last written, the file, whether it was modified, the user and host it
+  belongs to, and the file being opened
 
 #### Scenario: Open read-only
 - **WHEN** the user selects a file with a leftover swap file and answers
@@ -123,6 +124,18 @@ tree, SHALL be those from before the attempt.
 - **WHEN** the user jumps in a pane to a file and declines its counterpart
 - **THEN** the prompt is shown once for that jump, and again only after the
   pane showed another file and the user returns to that one
+
+#### Scenario: File that landed in the pane of the other side
+- **WHEN** a file of one side is opened in the pane of the other side and
+  the user declines its counterpart
+- **THEN** the prompt is shown once, the file stays in the pane it landed
+  in, and the other pane and the tree's mark are unchanged
+
+#### Scenario: Declined while the layout is reset
+- **WHEN** `:TwintreeResetLayout` has to open the compared file again and
+  the user declines it
+- **THEN** the layout is rebuilt with empty panes, no file is recorded as
+  compared, no line of the tree is marked, and the cursor is in the tree
 
 ### Requirement: Swap files without a user interface
 When no user interface is attached, so that nobody can answer, the plugin

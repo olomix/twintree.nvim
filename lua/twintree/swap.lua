@@ -20,9 +20,11 @@ end
 ---@param swapname string
 ---@param info table what `swapinfo()` returned for the swap file
 ---@param path string file that is being opened
----@param file_mtime? integer modification time of that file
+---@param dates? { swap?: integer, file?: integer } modification times of
+---  the swap file and of the file that is being opened
 ---@return string
-function M.describe(swapname, info, path, file_mtime)
+function M.describe(swapname, info, path, dates)
+  dates = dates or {}
   local lines = {
     "E325: ATTENTION",
     ('Found a swap file by the name "%s"'):format(swapname),
@@ -32,7 +34,9 @@ function M.describe(swapname, info, path, file_mtime)
   else
     local running = (info.pid or 0) > 0
     vim.list_extend(lines, {
-      ("          owned by: %s   dated: %s"):format(info.user, date(info.mtime)),
+      -- The swap file's own time, as in Neovim's message: `info.mtime` is
+      -- when the edited file was last saved, which can be long ago.
+      ("          owned by: %s   dated: %s"):format(info.user, date(dates.swap or info.mtime)),
       ("         file name: %s"):format(info.fname),
       ("          modified: %s"):format(info.dirty == 1 and "YES" or "no"),
       ("         user name: %s   host name: %s"):format(info.user, info.host),
@@ -42,8 +46,8 @@ function M.describe(swapname, info, path, file_mtime)
     })
   end
   table.insert(lines, ('While opening file "%s"'):format(path))
-  if file_mtime then
-    table.insert(lines, ("             dated: %s"):format(date(file_mtime)))
+  if dates.file then
+    table.insert(lines, ("             dated: %s"):format(date(dates.file)))
   end
   return table.concat(lines, "\n")
 end
@@ -103,9 +107,12 @@ function M.on_swap_exists()
   local swapname = vim.v.swapname
   local info = vim.fn.swapinfo(swapname)
   local path = vim.fn.expand("<afile>:p")
-  local stat = vim.uv.fs_stat(path)
+  local file_stat, swap_stat = vim.uv.fs_stat(path), vim.uv.fs_stat(swapname)
   local labels, letters = M.choices(not info.error and (info.pid or 0) > 0)
-  local text = M.describe(swapname, info, path, stat and stat.mtime.sec)
+  local text = M.describe(swapname, info, path, {
+    swap = swap_stat and swap_stat.mtime.sec,
+    file = file_stat and file_stat.mtime.sec,
+  })
   chosen = M.letter(letters, M.ask(text, labels))
   vim.v.swapchoice = chosen
 end

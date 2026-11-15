@@ -629,6 +629,12 @@ local function move_to_own_pane(tab, win, buf)
   if not landing or not side or side == landing then
     return
   end
+  -- One jump queues this move more than once. After a declined swap file
+  -- the file is still in the landing pane, and every further call would
+  -- ask again.
+  if state.declined and state.declined[landing] == buf then
+    return
+  end
 
   local view = vim.api.nvim_win_call(win, vim.fn.winsaveview)
   local was_current = vim.api.nvim_get_current_win() == win
@@ -703,7 +709,8 @@ function M.follow()
     -- so the move has to wait. SafeState comes before the screen is drawn
     -- and spares a flash of the file in the wrong pane; it does not fire
     -- for a jump made by a mapping or a callback, which the scheduled call
-    -- covers. Whichever runs second finds the file moved and does nothing.
+    -- covers. Whichever runs second finds the file moved, or its
+    -- counterpart declined, and does nothing.
     local function move()
       move_to_own_pane(tab, win, buf)
     end

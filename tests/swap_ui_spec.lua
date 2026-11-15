@@ -157,6 +157,9 @@ describe("swap files", function()
       assert.truthy(text:find("process ID: no longer running", 1, true))
       assert.truthy(text:find(('While opening file "%s/a.txt"'):format(repo), 1, true))
       assert.truthy(text:find(swap_dir, 1, true))
+      local swapname = vim.fn.glob(swap_dir .. "/*.swp", true, true)[1]
+      local swap_date = os.date("%a %b %d %H:%M:%S %Y", vim.uv.fs_stat(swapname).mtime.sec)
+      assert.truthy(text:find("owned by: [^\n]* dated: " .. vim.pesc(swap_date)))
     end)
 
     it("open read-only on Open Read-Only", function()
@@ -305,6 +308,24 @@ describe("swap files", function()
         assert_pair("a.txt")
       end)
 
+      it("ask once when the file landed in the pane of the other side", function()
+        select("b.txt")
+        local s = state()
+        answer = 5
+        -- A file of the before side in the after pane: the plugin moves it
+        -- to its own pane, from callbacks that one jump queues repeatedly.
+        api.nvim_set_current_win(s.wins.after)
+        vim.cmd.edit(s.before.root .. "/a.txt")
+        vim.wait(100)
+
+        assert.equals(1, #asked)
+        assert.equals(1, #errors())
+        s = state()
+        assert.equals(s.before.root .. "/a.txt", name(s.wins.after))
+        assert.equals(s.before.root .. "/b.txt", name(s.wins.before))
+        assert.equals("b.txt", s.selected)
+      end)
+
       it("show the counterpart on Edit anyway", function()
         select("b.txt")
         answer = 2
@@ -334,6 +355,23 @@ describe("swap files", function()
       assert.equals(1, #asked)
       assert.equals(1, #errors())
       assert.truthy(errors()[1].msg:find("a.txt was not opened", 1, true))
+
+      -- Nothing is shown, so nothing is recorded or marked as shown.
+      assert.is_nil(s.pair)
+      assert.is_nil(s.selected)
+      assert.is_nil(s.bufs)
+      assert.equals("twintree://empty", name(s.wins.before))
+      assert.equals("twintree://empty", name(s.wins.after))
+      assert.is_false(vim.wo[s.wins.after].diff)
+      assert.equals(tree(), api.nvim_get_current_win())
+      local ns = api.nvim_get_namespaces().twintree
+      for _, mark in ipairs(api.nvim_buf_get_extmarks(s.tree_buf, ns, 0, -1, { details = true })) do
+        assert.is_nil(mark[4].line_hl_group)
+      end
+      -- A refresh must not bring the mark back either.
+      api.nvim_set_current_win(tree())
+      h.keys("R")
+      assert.is_nil(state().selected)
     end)
   end)
 

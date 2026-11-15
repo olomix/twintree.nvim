@@ -2,7 +2,7 @@
 
 ## 1. Prompt content
 
-- [x] 1.1 Create `lua/twintree/swap.lua` with the pure `describe(info, path, file_mtime)` and `choices(running)`; verify with specs in `tests/swap_spec.lua` for a dead owner, a running owner (`STILL RUNNING`, no Delete it), a modified file, an unreadable swap file, and the letters of all six choices
+- [x] 1.1 Create `lua/twintree/swap.lua` with the pure `describe(swapname, info, path, dates)` and `choices(running)`; verify with specs in `tests/swap_spec.lua` for a dead owner, a running owner (`STILL RUNNING`, no Delete it), a modified file, an unreadable swap file, and the letters of all six choices
 - [x] 1.2 Add `swap.ask(text, labels)` using `vim.fn.confirm` and the mapping from its answer to `v:swapchoice`, with 0 treated as Abort; verify with a spec that stubs `vim.fn.confirm` and checks the text, the labels and each answer including 0
 
 ## 2. Opening through a command
@@ -35,6 +35,7 @@
 - [x] 6.1 Add cases to `tests/resize_spec.lua` in the real terminal: a leftover swap file, a selection in the tree, the prompt text on the screen, a key as the answer and the result for Open Read-Only and for Abort; and the prompt after a jump made with `:edit` in the before pane
 - [x] 6.2 Run `make test` and verify the whole suite passes
 - [x] 6.3 Check by hand with two Neovim instances: a file open in the other instance (warning, no question), and a leftover swap file from a killed instance (prompt, each kind of answer); record the result in `notes.md` of the change without machine-specific details
+- [x] 6.4 Fixes from review: do not ask again from the queued moves of a file that landed in the other side's pane; record empty panes before a layout reset shows the pair again, so a declined file leaves nothing recorded; date the swap file by its own modification time; make the swap fixture wait until the edit is in the swap file; verify with the specs added for each case
 
 ## Workflow follow-up
 
