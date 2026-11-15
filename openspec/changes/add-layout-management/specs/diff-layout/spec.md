@@ -36,6 +36,23 @@ tree at its remembered width. The ratio starts at one half.
 - **WHEN** the tree is hidden and the terminal is resized
 - **THEN** the two panes keep their ratio
 
+#### Scenario: Terminal too narrow for the layout
+- **WHEN** the terminal becomes so narrow that the panes are squeezed to the
+  minimum width, and is then made wide again
+- **THEN** the tree has its remembered width and the panes have their ratio,
+  as before the terminal was narrowed
+
+#### Scenario: Diff opened in a narrow terminal
+- **WHEN** a diff is opened in a terminal too narrow for the tree and two
+  panes, and the terminal is then made wide
+- **THEN** the tree has the configured width and the panes are equally wide
+
+#### Scenario: A window of the user between the panes
+- **WHEN** the user opened a window of their own between the before and the
+  after pane and the terminal is resized
+- **THEN** the panes keep their ratio and the width of that window is not
+  changed
+
 ### Requirement: Equalizing resets the pane ratio
 Equalizing the windows SHALL make the before and after panes equally wide
 and SHALL make one half the ratio that later terminal resizes keep.
@@ -117,6 +134,24 @@ same before and after.
   `:TwintreeToggleTree`
 - **THEN** the tree is rebuilt from the changed files and shown
 
+#### Scenario: Tree buffer was unloaded
+- **WHEN** the user unloaded the tree buffer with `:bdelete` and runs
+  `:TwintreeToggleTree`
+- **THEN** the tree is rebuilt with its content and keys, and the selected
+  file is still marked
+
+#### Scenario: Another buffer in the tree window
+- **WHEN** the user put another buffer into the tree window and runs
+  `:TwintreeToggleTree`
+- **THEN** the tree is shown as the leftmost window with its remembered
+  width
+
+#### Scenario: No room for the tree
+- **WHEN** the tree is hidden, the tab has no room for another window and the
+  user runs `:TwintreeToggleTree`
+- **THEN** a message says there is no room, no window is opened or closed,
+  and no Lua error is raised
+
 #### Scenario: The tree is the only window
 - **WHEN** the tree is the only window left in the tab and the user runs
   `:TwintreeToggleTree`
@@ -155,6 +190,23 @@ panes in diff mode.
 - **WHEN** the user had widened the tree and runs `:TwintreeResetLayout`
 - **THEN** the tree has the configured width, and that is the width that is
   remembered from then on
+
+#### Scenario: Buffer set to be removed when hidden
+- **WHEN** another window of the tab shows a buffer whose own setting removes
+  it when it is hidden
+- **THEN** the window is closed, the buffer and its content are kept, and
+  the buffer keeps its setting
+
+#### Scenario: Tab with no room for another window
+- **WHEN** the tab is filled with so many windows that no further window can
+  be opened, and the user runs `:TwintreeResetLayout`
+- **THEN** the tab ends up with exactly the three windows of the original
+  view
+
+#### Scenario: Windows closed by an autocommand
+- **WHEN** an autocommand of the user closes another window of the tab while
+  the reset is closing windows
+- **THEN** the reset completes without a Lua error
 
 ### Requirement: Commands outside a diff tab
 `:TwintreeToggleTree` and `:TwintreeResetLayout` SHALL report an error
