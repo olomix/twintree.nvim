@@ -17,6 +17,9 @@ This is a prototype.
 
 - Neovim 0.11 or newer
 - git
+- Optional: [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons)
+  or [mini.icons](https://github.com/echasnovski/mini.icons), with a Nerd
+  Font, for icons in the tree
 
 ## Installation
 
@@ -53,9 +56,32 @@ In the tree:
 | `<CR>` | Show the file in both panes, or fold a directory |
 | `R` | Refresh the list of changed files |
 
-A directory that exists on one side only is marked after its name, in the
-colour of that status: `A` when it is missing before, `D` when it is missing
-after.
+A line of the tree shows the file's icon, its name, the lines added and
+deleted, and its status at the right edge:
+
+```
+▾ commons/
+│ json.go                  +9 -4 M
+│ json_test.go           +23 -18 M
+▾ db_migrations/ams/             A
+│ kz_028_pr…_events.sql   +40 -0 A
+│ client.go ← api.go      +12 -3 R
+```
+
+- **Status:** `A` added, `M` modified, `D` deleted, `R` renamed, each in its
+  own colour. A directory that exists on one side only carries `A` or `D` in
+  the same column.
+- **Line counts:** untracked files count as all lines added. Binary files
+  show no counts.
+- **Icons:** shown when an icon plugin is installed; directories then get
+  folder glyphs in place of the arrows.
+- **Long names** are cut in the middle, so the beginning and the extension
+  stay visible. Widen the tree to see more; it is redrawn for its width.
+- **Renamed files** show where they came from when there is room: the old
+  file name for a rename within a directory, the old path otherwise.
+
+As the tree gets narrower, a line gives up the rename origin first, then the
+middle of the name, then the line counts. The status letter always stays.
 
 Files are shown in full; unchanged lines are not folded. Press `zi` in a
 pane to switch folding on and see only the changes with context.
@@ -131,6 +157,8 @@ require("twintree").setup({
   tree_width = 35,
   -- Default: stdpath("cache") .. "/twintree"
   cache_dir = nil,
+  -- Icons in the tree, when an icon plugin is installed.
+  icons = true,
 })
 ```
 

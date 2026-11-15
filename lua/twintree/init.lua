@@ -153,6 +153,7 @@ function M.toggle_tree()
   end
   -- Not `sync`: the sizes Neovim gave the windows here mean nothing.
   layout.reapply(tab)
+  treeview.redraw_if_resized(tab)
   return true
 end
 
@@ -238,6 +239,7 @@ function M.reset_layout()
   treeview.draw(tab)
   treeview.focus_selected(tab, tree_win)
   layout.reapply(tab)
+  treeview.redraw_if_resized(tab)
   return true
 end
 

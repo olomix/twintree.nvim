@@ -1,4 +1,6 @@
+local config = require("twintree.config")
 local git = require("twintree.git")
+local icons = require("twintree.icons")
 local session = require("twintree.session")
 local tree = require("twintree.tree")
 
@@ -15,6 +17,8 @@ local hl_links = {
   TwintreeRenamed = "Special",
   TwintreeDirectory = "Directory",
   TwintreeSelected = "Visual",
+  TwintreeGuide = "NonText",
+  TwintreeOrigin = "Comment",
 }
 
 local function define_highlights()
@@ -59,9 +63,27 @@ local function entries_of(buf)
   return vim.b[buf].twintree_entries or {}
 end
 
+---Cells available for a line of the tree: the text area of the window that
+---shows it, since lines are padded to put the status letters at its edge.
 ---@param state twintree.Session
+---@return integer
+function M.text_width(state)
+  local win = session.tree_win(state)
+  if not win and vim.api.nvim_buf_is_valid(state.tree_buf) then
+    -- The user may show the tree in a window of their own.
+    win = vim.fn.win_findbuf(state.tree_buf)[1]
+  end
+  if not win then
+    return config.options.tree_width
+  end
+  local textoff = vim.fn.getwininfo(win)[1].textoff
+  return math.max(vim.api.nvim_win_get_width(win) - textoff, 1)
+end
+
+---@param state twintree.Session
+---@param width? integer
 ---@return twintree.Line[]
-local function lines_of(state)
+local function lines_of(state, width)
   local function exists(side, path)
     local stat = vim.uv.fs_stat(vim.fs.joinpath(side.root, path))
     return stat ~= nil and stat.type == "directory"
@@ -74,12 +96,13 @@ local function lines_of(state)
       return "D"
     end
   end
-  return tree.lines(
-    entries_of(state.tree_buf),
-    state.collapsed,
-    state.selected,
-    dir_status
-  )
+  return tree.lines(entries_of(state.tree_buf), {
+    collapsed = state.collapsed,
+    selected = state.selected,
+    dir_status = dir_status,
+    width = width or M.text_width(state),
+    icon = icons.source(),
+  })
 end
 
 ---Redraw the tree buffer from the session state.
@@ -92,7 +115,9 @@ function M.draw(tab)
   define_highlights()
 
   local buf = state.tree_buf
-  local lines = lines_of(state)
+  local width = M.text_width(state)
+  local lines = lines_of(state, width)
+  vim.b[buf].twintree_width = width
   local text = vim.tbl_map(function(line)
     return line.text
   end, lines)
@@ -114,6 +139,19 @@ function M.draw(tab)
         line_hl_group = "TwintreeSelected",
       })
     end
+  end
+end
+
+---Draw the tree again when the width of its window is not the one it was
+---drawn for.
+---@param tab? integer
+function M.redraw_if_resized(tab)
+  local state = session.get(tab)
+  if not state or not M.is_tree_buf(state.tree_buf) then
+    return
+  end
+  if vim.b[state.tree_buf].twintree_width ~= M.text_width(state) then
+    M.draw(tab)
   end
 end
 

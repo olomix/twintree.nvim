@@ -47,6 +47,54 @@ describe("changes.parse_name_status", function()
   end)
 end)
 
+describe("changes.parse_numstat", function()
+  it("parses added and deleted counts by path", function()
+    assert.same({
+      ["a.lua"] = { added = 5, deleted = 3 },
+      ["src/b c.lua"] = { added = 0, deleted = 12 },
+      ["ї/файл.txt"] = { added = 40, deleted = 0 },
+    }, changes.parse_numstat(z("5\t3\ta.lua", "0\t12\tsrc/b c.lua", "40\t0\tї/файл.txt")))
+  end)
+
+  it("keys a rename by its new path", function()
+    assert.same({
+      ["new/a.lua"] = { added = 2, deleted = 1 },
+      ["z.lua"] = { added = 1, deleted = 1 },
+    }, changes.parse_numstat(z("2\t1\t", "old/a.lua", "new/a.lua", "1\t1\tz.lua")))
+  end)
+
+  it("has no entry for a binary file", function()
+    assert.same(
+      { ["a.lua"] = { added = 1, deleted = 0 } },
+      changes.parse_numstat(z("-\t-\tlogo.png", "1\t0\ta.lua"))
+    )
+  end)
+
+  it("keeps a tab inside a file name", function()
+    assert.same(
+      { ["tab\there.txt"] = { added = 1, deleted = 2 } },
+      changes.parse_numstat(z("1\t2\ttab\there.txt"))
+    )
+  end)
+
+  it("returns nothing for empty output", function()
+    assert.same({}, changes.parse_numstat(""))
+  end)
+end)
+
+describe("changes.with_counts", function()
+  it("puts counts onto the entries that have them", function()
+    local entries = {
+      { status = "M", path = "a.lua" },
+      { status = "A", path = "logo.png" },
+    }
+    assert.same({
+      { status = "M", path = "a.lua", added = 5, deleted = 3 },
+      { status = "A", path = "logo.png" },
+    }, changes.with_counts(entries, { ["a.lua"] = { added = 5, deleted = 3 } }))
+  end)
+end)
+
 describe("changes.parse_paths", function()
   it("splits NUL-separated paths", function()
     assert.same({ "a b.txt", "ї/c.txt" }, changes.parse_paths(z("a b.txt", "ї/c.txt")))
@@ -65,6 +113,26 @@ describe("changes.merge_untracked", function()
       { status = "A", path = "a.txt" },
       { status = "M", path = "b.txt" },
     }, changes.merge_untracked(entries, { "a.txt" }))
+  end)
+
+  it("counts the lines of untracked files", function()
+    local counts = { ["a.txt"] = 7 }
+    assert.same({
+      { status = "A", path = "a.txt", added = 7, deleted = 0 },
+      { status = "A", path = "b.bin" },
+    }, changes.merge_untracked({}, { "a.txt", "b.bin" }, function(path)
+      return counts[path]
+    end))
+  end)
+
+  it("adds the lines on disk to a file removed from the index", function()
+    local entries = { { status = "D", path = "a.txt", added = 0, deleted = 4 } }
+    assert.same(
+      { { status = "M", path = "a.txt", added = 6, deleted = 4 } },
+      changes.merge_untracked(entries, { "a.txt" }, function()
+        return 6
+      end)
+    )
   end)
 
   it("treats an unstaged-removed file that is still on disk as modified", function()

@@ -127,6 +127,35 @@ function M.resolve_range(dir, revs)
   return { before = before, after = after }
 end
 
+-- Larger files are not read just to count their lines.
+local MAX_COUNTED_SIZE = 5 * 1024 * 1024
+-- git looks for a NUL byte in this many leading bytes to call a file binary.
+local BINARY_PROBE = 8000
+
+---Number of lines of a file, for files git has no line counts for.
+---@param path string
+---@return integer? lines nil for a binary, large or unreadable file
+function M.count_lines(path)
+  local stat = vim.uv.fs_stat(path)
+  if not stat or stat.type ~= "file" or stat.size > MAX_COUNTED_SIZE then
+    return nil
+  end
+  local fd = vim.uv.fs_open(path, "r", 438)
+  if not fd then
+    return nil
+  end
+  local data = vim.uv.fs_read(fd, stat.size, 0)
+  vim.uv.fs_close(fd)
+  if not data or data:sub(1, BINARY_PROBE):find("\0", 1, true) then
+    return nil
+  end
+  local _, lines = data:gsub("\n", "\n")
+  if #data > 0 and data:sub(-1) ~= "\n" then
+    lines = lines + 1
+  end
+  return lines
+end
+
 ---List files that differ between `before` and `after`.
 ---@param repo string repository toplevel
 ---@param before string commit
@@ -134,16 +163,25 @@ end
 ---@return twintree.Entry[]? entries
 ---@return string? err
 function M.changed_files(repo, before, after)
-  local args = { "diff", "--name-status", "-z", "-M", before }
-  if after then
-    table.insert(args, after)
+  local function diff(format)
+    local args = { "diff", format, "-z", "-M", before }
+    if after then
+      table.insert(args, after)
+    end
+    table.insert(args, "--")
+    return M.run(repo, args)
   end
-  table.insert(args, "--")
-  local out, err = M.run(repo, args)
+
+  local out, err = diff("--name-status")
   if not out then
     return nil, err
   end
   local entries = changes.parse_name_status(out)
+  out, err = diff("--numstat")
+  if not out then
+    return nil, err
+  end
+  changes.with_counts(entries, changes.parse_numstat(out))
   if after then
     return changes.sorted(entries)
   end
@@ -152,7 +190,9 @@ function M.changed_files(repo, before, after)
   if not out then
     return nil, err
   end
-  return changes.merge_untracked(entries, changes.parse_paths(out))
+  return changes.merge_untracked(entries, changes.parse_paths(out), function(path)
+    return M.count_lines(vim.fs.joinpath(repo, path))
+  end)
 end
 
 ---Branch, tag and remote names for command completion.

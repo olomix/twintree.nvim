@@ -16,7 +16,25 @@ local M = {}
 ---@field selected? boolean
 ---@field highlights { [1]: integer, [2]: integer, [3]: string }[] byte ranges
 
+---@class twintree.LineOpts
+---@field collapsed? table<string, boolean> directory paths that are folded
+---@field selected? string path of the selected file
+---@field dir_status? fun(path: string): "A"|"D"|nil "A" when the directory
+---  exists only on the after side, "D" when only on the before side
+---@field width? integer display cells available for a line
+---@field icon? fun(name: string, kind: "file"|"dir_open"|"dir_closed"): string?, string?
+---  glyph and highlight group; nil gives a file no icon and a directory an
+---  arrow
+
 M.EMPTY_MESSAGE = "No changes"
+
+M.DEFAULT_WIDTH = 35
+-- A cut name keeps at least this many cells before the counts give way.
+M.MIN_NAME = 10
+
+local GUIDE = "│ "
+local ELLIPSIS = "…"
+local ORIGIN = " ← "
 
 local status_hl = {
   A = "TwintreeAdded",
@@ -24,6 +42,72 @@ local status_hl = {
   D = "TwintreeDeleted",
   R = "TwintreeRenamed",
 }
+
+local function cells(text)
+  return vim.fn.strdisplaywidth(text)
+end
+
+local function chars(text)
+  return vim.fn.split(text, [[\zs]])
+end
+
+---The longest beginning of `text` that is at most `room` cells wide.
+local function head(text, room)
+  local out, used = {}, 0
+  for _, char in ipairs(chars(text)) do
+    local width = cells(char)
+    if used + width > room then
+      break
+    end
+    table.insert(out, char)
+    used = used + width
+  end
+  return table.concat(out)
+end
+
+---The longest end of `text` that is at most `room` cells wide.
+local function tail(text, room)
+  local list = chars(text)
+  local out, used = {}, 0
+  for i = #list, 1, -1 do
+    local width = cells(list[i])
+    if used + width > room then
+      break
+    end
+    table.insert(out, 1, list[i])
+    used = used + width
+  end
+  return table.concat(out)
+end
+
+---Cut a name in the middle so that it fits into `room` cells and its
+---extension stays visible. The result can be a cell short of `room` when a
+---wide character does not fit.
+---@param name string
+---@param room integer
+---@return string
+function M.cut(name, room)
+  if cells(name) <= room then
+    return name
+  end
+  if room <= 0 then
+    return ""
+  end
+  if room == 1 then
+    return ELLIPSIS
+  end
+
+  local keep = room - 1
+  local tail_room = math.floor(keep / 2)
+  local ext = name:match("%.[^./]*$")
+  if ext and ext ~= name then
+    local ext_cells = cells(ext)
+    if ext_cells > tail_room and ext_cells < keep then
+      tail_room = ext_cells
+    end
+  end
+  return head(name, keep - tail_room) .. ELLIPSIS .. tail(name, tail_room)
+end
 
 ---Make a name safe to show on one buffer line.
 local function display(name)
@@ -94,16 +178,158 @@ function M.build(entries)
   return root
 end
 
-local function dir_line(node, depth, is_collapsed, status)
-  local indent = ("  "):rep(depth)
-  local text = indent
-    .. (is_collapsed and "▸ " or "▾ ")
-    .. display(node.name)
-    .. "/"
-  local highlights = { { #indent, #text, "TwintreeDirectory" } }
+---Join pieces `{ text, highlight? }` into a line text and its highlights.
+local function join(pieces)
+  local text, highlights = "", {}
+  for _, piece in ipairs(pieces) do
+    if piece[1] ~= "" then
+      if piece[2] then
+        table.insert(highlights, { #text, #text + #piece[1], piece[2] })
+      end
+      text = text .. piece[1]
+    end
+  end
+  return text, highlights
+end
+
+---Pieces of the right-hand block: line counts and the status letter.
+local function right_block(status, added, deleted)
+  local pieces = {}
+  if added then
+    table.insert(pieces, { " " })
+    table.insert(pieces, { "+" .. added, "TwintreeAdded" })
+    table.insert(pieces, { " " })
+    table.insert(pieces, { "-" .. (deleted or 0), "TwintreeDeleted" })
+  end
   if status then
-    text = text .. " " .. status
-    table.insert(highlights, { #text - 1, #text, status_hl[status] })
+    table.insert(pieces, { " " })
+    table.insert(pieces, { status, status_hl[status] })
+  end
+  return pieces
+end
+
+local function width_of(pieces)
+  local total = 0
+  for _, piece in ipairs(pieces) do
+    total = total + cells(piece[1])
+  end
+  return total
+end
+
+---Put a left part and a right-hand block on one line of `width` cells.
+local function assemble(left, right, width)
+  local pieces = vim.list_extend({}, left)
+  if #right > 0 then
+    local pad = width - width_of(left) - width_of(right)
+    table.insert(pieces, { (" "):rep(math.max(pad, 0)) })
+    vim.list_extend(pieces, right)
+  end
+  return join(pieces)
+end
+
+---A line for a window too narrow for anything but the status letter.
+local function squeezed(prefix, status, width)
+  if not status then
+    return head(prefix, width), {}
+  end
+  if width < 2 then
+    return status, { { 0, #status, status_hl[status] } }
+  end
+  local left = head(prefix, width - 2)
+  return assemble({ { left } }, { { " " }, { status, status_hl[status] } }, width)
+end
+
+---Where a renamed file came from: the old file name when it stayed in its
+---directory, the old path otherwise.
+local function origin_of(entry)
+  if not entry.old_path then
+    return nil
+  end
+  local function dirname(path)
+    return path:match("^(.*)/[^/]*$") or ""
+  end
+  if dirname(entry.old_path) == dirname(entry.path) then
+    return display(entry.old_path:match("[^/]*$"))
+  end
+  return display(entry.old_path)
+end
+
+local function file_line(node, depth, opts)
+  local entry = node.entry
+  local width = opts.width
+  local prefix = { { GUIDE:rep(depth), "TwintreeGuide" } }
+  local glyph, glyph_hl
+  if opts.icon then
+    glyph, glyph_hl = opts.icon(node.name, "file")
+  end
+  if glyph then
+    table.insert(prefix, { glyph, glyph_hl })
+    table.insert(prefix, { " " })
+  end
+
+  local name = display(node.name)
+  local origin = origin_of(entry)
+  local full = right_block(entry.status, entry.added, entry.deleted)
+  local bare = right_block(entry.status)
+  local prefix_width = width_of(prefix)
+  local room_full = width - prefix_width - width_of(full)
+  local room_bare = width - prefix_width - width_of(bare)
+  local name_cells = cells(name)
+
+  local left, right
+  if origin and name_cells + cells(ORIGIN .. origin) <= room_full then
+    left = { { name }, { ORIGIN .. origin, "TwintreeOrigin" } }
+    right = full
+  elseif name_cells <= room_full then
+    left, right = { { name } }, full
+  elseif entry.added and room_full >= math.min(M.MIN_NAME, name_cells) then
+    left, right = { { M.cut(name, room_full) } }, full
+  elseif room_bare >= 1 then
+    left, right = { { M.cut(name, room_bare) } }, bare
+  end
+
+  local text, highlights
+  if left then
+    text, highlights = assemble(vim.list_extend(prefix, left), right, width)
+  else
+    text, highlights = squeezed(join(prefix), entry.status, width)
+  end
+  return {
+    text = text,
+    type = "file",
+    path = node.path,
+    entry = entry,
+    selected = node.path == opts.selected or nil,
+    highlights = highlights,
+  }
+end
+
+local function dir_line(node, depth, is_collapsed, status, opts)
+  local width = opts.width
+  local kind = is_collapsed and "dir_closed" or "dir_open"
+  local glyph, glyph_hl
+  if opts.icon then
+    glyph, glyph_hl = opts.icon(node.name, kind)
+  end
+  if not glyph then
+    glyph, glyph_hl = is_collapsed and "▸" or "▾", "TwintreeDirectory"
+  end
+  local prefix = {
+    { GUIDE:rep(depth), "TwintreeGuide" },
+    { glyph, glyph_hl },
+    { " " },
+  }
+  local right = right_block(status)
+  local room = width - width_of(prefix) - width_of(right)
+
+  local text, highlights
+  if room >= 2 then
+    -- The slash is not part of what gets cut.
+    local name = M.cut(display(node.name), room - 1) .. "/"
+    table.insert(prefix, { name, "TwintreeDirectory" })
+    text, highlights = assemble(prefix, right, width)
+  else
+    text, highlights = squeezed(join(prefix), status, width)
   end
   return {
     text = text,
@@ -114,48 +340,32 @@ local function dir_line(node, depth, is_collapsed, status)
   }
 end
 
-local function file_line(node, depth, selected)
-  local indent = ("  "):rep(depth)
-  local entry = node.entry
-  local text = indent .. entry.status .. " " .. display(node.name)
-  if entry.old_path then
-    text = text .. " ← " .. display(entry.old_path)
-  end
-  return {
-    text = text,
-    type = "file",
-    path = node.path,
-    entry = entry,
-    selected = node.path == selected or nil,
-    highlights = { { #indent, #indent + 1, status_hl[entry.status] } },
-  }
-end
-
 ---Flatten the tree into display lines.
 ---@param entries twintree.Entry[]
----@param collapsed? table<string, boolean> directory paths that are folded
----@param selected? string path of the selected file
----@param dir_status? fun(path: string): "A"|"D"|nil "A" when the directory
----  exists only on the after side, "D" when only on the before side
+---@param opts? twintree.LineOpts
 ---@return twintree.Line[]
-function M.lines(entries, collapsed, selected, dir_status)
+function M.lines(entries, opts)
   if #entries == 0 then
     return { { text = M.EMPTY_MESSAGE, type = "message", highlights = {} } }
   end
-  collapsed = collapsed or {}
+  opts = vim.tbl_extend("keep", opts or {}, {
+    collapsed = {},
+    width = M.DEFAULT_WIDTH,
+  })
+  opts.width = math.max(opts.width, 1)
 
   local lines = {}
   local function walk(node, depth)
     for _, child in ipairs(node.children) do
       if child.type == "dir" then
-        local is_collapsed = collapsed[child.path] == true
-        local status = dir_status and dir_status(child.path)
-        table.insert(lines, dir_line(child, depth, is_collapsed, status))
+        local is_collapsed = opts.collapsed[child.path] == true
+        local status = opts.dir_status and opts.dir_status(child.path)
+        table.insert(lines, dir_line(child, depth, is_collapsed, status, opts))
         if not is_collapsed then
           walk(child, depth + 1)
         end
       else
-        table.insert(lines, file_line(child, depth, selected))
+        table.insert(lines, file_line(child, depth, opts))
       end
     end
   end

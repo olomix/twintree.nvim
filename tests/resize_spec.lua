@@ -183,6 +183,47 @@ describe("in a real terminal", function()
     end
   end)
 
+  pty_it("redraws the tree for the width of its window", function()
+    local function tree_lines()
+      return lua(
+        [[
+          local session = require("twintree.session")
+          local state = session.get(...)
+          local win = session.tree_win(state)
+          return {
+            width = vim.api.nvim_win_get_width(win),
+            lines = vim.api.nvim_buf_get_lines(state.tree_buf, 0, -1, false),
+          }
+        ]],
+        tab
+      )
+    end
+    ---Every line ends with its status letter at the edge of the window.
+    local function fits(width)
+      local last
+      local ok = vim.wait(5000, function()
+        last = tree_lines()
+        if last.width ~= width then
+          return false
+        end
+        for _, line in ipairs(last.lines) do
+          if vim.fn.strdisplaywidth(line) ~= width or not line:match(" [AMDR]$") then
+            return false
+          end
+        end
+        return #last.lines > 0
+      end, 50)
+      assert(ok, ("tree at width %d: %s"):format(width, vim.inspect(last)))
+    end
+
+    fits(35)
+    focus("tree")
+    press(":vertical resize 50<CR>")
+    fits(50)
+    press(":vertical resize 16<CR>")
+    fits(16)
+  end)
+
   pty_it("keeps a hand-set ratio across a resize", function()
     focus("before")
     press(":vertical resize 30<CR>")

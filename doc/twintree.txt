@@ -27,6 +27,7 @@ REQUIREMENTS                                            *twintree-requirements*
 
 - Neovim 0.11 or newer
 - git
+- Optional, for icons: `nvim-web-devicons` or `mini.icons`, and a Nerd Font
 
 ==============================================================================
 COMMANDS                                                    *twintree-commands*
@@ -91,13 +92,43 @@ Tree window (left):
             On a directory: fold or unfold it.
     R       Recompute the list of changed files.
 
+A line of the tree shows, from left to right: an indent guide per level of
+nesting, the icon, the name, the lines added and deleted, and the status
+letter at the right edge of the window: >
+
+    ▾ commons/
+    │ json.go                  +9 -4 M
+    │ json_test.go           +23 -18 M
+    ▾ db_migrations/ams/             A
+    │ kz_028_pr…_events.sql   +40 -0 A
+    │ client.go ← api.go      +12 -3 R
+<
 Status letters: A added, M modified, D deleted, R renamed. Untracked files of
 the working tree are listed as added. A directory that contains only one
 directory is shown together with it on one line.
 
-A directory that exists on one side only has a letter after its name, in the
-colour of that status: A when it is missing on the before side, D when it is
-missing on the after side.
+A directory that exists on one side only has a letter in the column of the
+status letters, in the colour of that status: A when it is missing on the
+before side, D when it is missing on the after side.
+
+Line counts are the lines added and deleted between the two sides. An
+untracked file counts as all lines added. A binary file, and an untracked
+file larger than 5 MB, shows no counts.
+
+Icons are shown when |twintree-icons| finds an icon plugin. Directories then
+have folder glyphs in place of the arrows.
+
+A name that does not fit is cut in the middle, so that its beginning and its
+extension stay visible. The tree is drawn for the width of its window and
+drawn again when that width changes, so widening the tree shows more.
+
+A renamed file shows where it came from after its name, when the whole line
+still fits: the old file name for a rename within a directory, the old path
+otherwise.
+
+When a line does not fit it gives up, in this order: the rename origin, the
+middle of the name down to ten cells, the line counts, more of the name. The
+status letter is always shown.
 
 Before and after panes:
 
@@ -165,6 +196,11 @@ Highlight groups, linked by default:
     TwintreeRenamed      Special
     TwintreeDirectory    Directory
     TwintreeSelected     Visual
+    TwintreeGuide        NonText
+    TwintreeOrigin       Comment
+
+Line counts use TwintreeAdded and TwintreeDeleted. An icon uses the highlight
+group its plugin gives it.
 
 ==============================================================================
 CONFIGURATION                                          *twintree-configuration*
@@ -178,8 +214,17 @@ Calling setup is optional. Defaults: >lua
       -- Directory for cached worktrees.
       -- Default: stdpath("cache") .. "/twintree"
       cache_dir = nil,
+      -- Icons in the tree, when an icon plugin is installed.
+      icons = true,
     })
 <
+                                                               *twintree-icons*
+Icons come from `mini.icons` or `nvim-web-devicons`, whichever is installed;
+`mini.icons` is used when both are. Neither is required. Most icons and the
+folder glyphs need a Nerd Font. Set `icons = false` to switch them off, for
+example when your terminal draws a glyph wider than one cell and the columns
+no longer line up.
+
 Lua API: >lua
 
     require("twintree").open({ "main" })  -- same as :Twintree main

@@ -4,6 +4,8 @@ local M = {}
 ---@field status "A"|"M"|"D"|"R"
 ---@field path string path relative to the repository root
 ---@field old_path? string previous path of a renamed file
+---@field added? integer lines added; nil when not known, as for a binary file
+---@field deleted? integer lines deleted
 
 ---Parse the output of `git diff --name-status -z`.
 ---@param out string
@@ -34,6 +36,47 @@ function M.parse_name_status(out)
   return entries
 end
 
+---Parse the output of `git diff --numstat -z -M`.
+---@param out string
+---@return table<string, { added: integer, deleted: integer }> counts by path;
+---  a binary file has no entry
+function M.parse_numstat(out)
+  local fields = vim.split(out, "\0", { plain = true })
+  local counts = {}
+  local i = 1
+  while fields[i] and fields[i] ~= "" do
+    local added, deleted, path = fields[i]:match("^([^\t]+)\t([^\t]+)\t(.*)$")
+    if not added then
+      break
+    end
+    if path == "" then
+      -- A rename: the old and the new path follow as separate fields.
+      path = fields[i + 2]
+      i = i + 3
+    else
+      i = i + 1
+    end
+    if path and added ~= "-" then
+      counts[path] = { added = tonumber(added), deleted = tonumber(deleted) }
+    end
+  end
+  return counts
+end
+
+---Put line counts onto entries.
+---@param entries twintree.Entry[]
+---@param counts table<string, { added: integer, deleted: integer }>
+---@return twintree.Entry[]
+function M.with_counts(entries, counts)
+  for _, entry in ipairs(entries) do
+    local count = counts[entry.path]
+    if count then
+      entry.added, entry.deleted = count.added, count.deleted
+    end
+  end
+  return entries
+end
+
 ---Parse NUL-separated file paths, as printed by `git ls-files -z`.
 ---@param out string
 ---@return string[]
@@ -57,19 +100,33 @@ end
 ---Add untracked files to a diff against the working tree.
 ---@param entries twintree.Entry[]
 ---@param untracked string[]
+---@param line_count? fun(path: string): integer? lines of an untracked
+---  file, nil when they cannot be counted
 ---@return twintree.Entry[]
-function M.merge_untracked(entries, untracked)
+function M.merge_untracked(entries, untracked, line_count)
+  line_count = line_count or function() end
   local by_path = {}
   for _, entry in ipairs(entries) do
     by_path[entry.path] = entry
   end
   for _, path in ipairs(untracked) do
+    local lines = line_count(path)
     local known = by_path[path]
     if known then
-      -- Removed from the index but still on disk (`git rm --cached`).
+      -- Removed from the index but still on disk (`git rm --cached`): git
+      -- reports its lines as deleted, the file on disk adds them back.
       known.status = "M"
+      known.added = lines
+      if not lines then
+        known.deleted = nil
+      end
     else
-      table.insert(entries, { status = "A", path = path })
+      table.insert(entries, {
+        status = "A",
+        path = path,
+        added = lines,
+        deleted = lines and 0 or nil,
+      })
     end
   end
   return M.sorted(entries)

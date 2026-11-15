@@ -132,9 +132,9 @@ describe("git", function()
       local second = h.commit(repo, "second")
 
       assert.same({
-        { status = "M", path = "a.txt" },
-        { status = "A", path = "new file.txt" },
-        { status = "D", path = "src/b.txt" },
+        { status = "M", path = "a.txt", added = 1, deleted = 1 },
+        { status = "A", path = "new file.txt", added = 1, deleted = 0 },
+        { status = "D", path = "src/b.txt", added = 0, deleted = 1 },
       }, git.changed_files(repo, first, second))
     end)
 
@@ -143,7 +143,15 @@ describe("git", function()
       local second = h.commit(repo, "rename")
 
       assert.same(
-        { { status = "R", old_path = "src/b.txt", path = "src/c.txt" } },
+        {
+          {
+            status = "R",
+            old_path = "src/b.txt",
+            path = "src/c.txt",
+            added = 0,
+            deleted = 0,
+          },
+        },
         git.changed_files(repo, first, second)
       )
     end)
@@ -159,9 +167,9 @@ describe("git", function()
       h.write(repo, "debug.log", "ignored\n")
 
       assert.same({
-        { status = "M", path = "a.txt" },
-        { status = "A", path = "docs/файл.md" },
-        { status = "M", path = "src/b.txt" },
+        { status = "M", path = "a.txt", added = 1, deleted = 1 },
+        { status = "A", path = "docs/файл.md", added = 1, deleted = 0 },
+        { status = "M", path = "src/b.txt", added = 1, deleted = 1 },
       }, git.changed_files(repo, base))
     end)
 
@@ -174,7 +182,47 @@ describe("git", function()
       h.write(repo, "plain/y.txt", "y\n")
 
       assert.same(
-        { { status = "A", path = "plain/y.txt" } },
+        { { status = "A", path = "plain/y.txt", added = 1, deleted = 0 } },
+        git.changed_files(repo, first)
+      )
+    end)
+
+    it("counts the lines of a rename with a change", function()
+      h.write(repo, "long.txt", "1\n2\n3\n4\n5\n6\n7\n8\n")
+      local base = h.commit(repo, "long")
+      h.git(repo, "mv", "long.txt", "moved.txt")
+      h.write(repo, "moved.txt", "1\n2\n3\n4\n5\n6\n7\nEIGHT\nnine\n")
+      local second = h.commit(repo, "move and change")
+
+      assert.same({
+        {
+          status = "R",
+          old_path = "long.txt",
+          path = "moved.txt",
+          added = 2,
+          deleted = 1,
+        },
+      }, git.changed_files(repo, base, second))
+    end)
+
+    it("gives no counts for a binary file", function()
+      h.write(repo, "blob.bin", "a\0b\n")
+      local second = h.commit(repo, "binary")
+      h.write(repo, "new.bin", "\0\1\2")
+
+      assert.same(
+        { { status = "A", path = "blob.bin" } },
+        git.changed_files(repo, first, second)
+      )
+      assert.same({ { status = "A", path = "new.bin" } }, git.changed_files(repo, second))
+    end)
+
+    it("counts a file removed from the index but still on disk", function()
+      h.write(repo, "a.txt", "a\nmore\nlines\n")
+      h.git(repo, "rm", "-q", "--cached", "a.txt")
+
+      assert.same(
+        { { status = "M", path = "a.txt", added = 3, deleted = 1 } },
         git.changed_files(repo, first)
       )
     end)
@@ -182,6 +230,40 @@ describe("git", function()
     it("returns nothing when the sides are equal", function()
       assert.same({}, git.changed_files(repo, first))
       assert.same({}, git.changed_files(repo, first, first))
+    end)
+  end)
+
+  describe("count_lines", function()
+    local dir
+
+    before_each(function()
+      dir = h.tmpdir()
+    end)
+
+    it("counts lines with and without a final newline", function()
+      h.write(dir, "nl.txt", "a\nb\nc\n")
+      h.write(dir, "no_nl.txt", "a\nb\nc")
+      h.write(dir, "empty.txt", "")
+      h.write(dir, "one.txt", "x")
+      assert.equals(3, git.count_lines(dir .. "/nl.txt"))
+      assert.equals(3, git.count_lines(dir .. "/no_nl.txt"))
+      assert.equals(0, git.count_lines(dir .. "/empty.txt"))
+      assert.equals(1, git.count_lines(dir .. "/one.txt"))
+    end)
+
+    it("gives nothing for what cannot be counted", function()
+      h.write(dir, "bin", "a\0b\n")
+      h.write(dir, "sub/x", "x\n")
+      assert.is_nil(git.count_lines(dir .. "/bin"))
+      assert.is_nil(git.count_lines(dir .. "/sub"))
+      assert.is_nil(git.count_lines(dir .. "/missing"))
+    end)
+
+    it("gives nothing for a file over the size limit", function()
+      local f = assert(io.open(dir .. "/big.txt", "w"))
+      f:write(("line\n"):rep(1100000))
+      f:close()
+      assert.is_nil(git.count_lines(dir .. "/big.txt"))
     end)
   end)
 

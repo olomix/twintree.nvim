@@ -88,6 +88,8 @@ vim.api.nvim_create_autocmd({ "WinResized", "VimResized", "TabEnter" }, {
   desc = "Keep the layout of a diff tab",
   callback = function()
     require("twintree.layout").sync()
+    -- Lines are padded to the width of the tree window.
+    require("twintree.treeview").redraw_if_resized()
   end,
 })
 

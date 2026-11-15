@@ -62,6 +62,16 @@ function M.buf_lines(buf)
   return vim.api.nvim_buf_get_lines(buf, 0, -1, false)
 end
 
+---A tree line without its padding: runs of spaces become one space.
+function M.squeeze(line)
+  return (line:gsub("  +", " "))
+end
+
+---The lines of a tree buffer without their padding.
+function M.tree_lines(buf)
+  return vim.tbl_map(M.squeeze, M.buf_lines(buf))
+end
+
 ---Move the cursor of `win` to the first line containing `text`.
 function M.goto_line(win, text)
   local buf = vim.api.nvim_win_get_buf(win)

@@ -3,7 +3,6 @@
 - Make git calls async and show a progress bar or spinner while work is in
   progress. Decide what to do when a conflicting command is issued while the
   previous one is still running.
-- Add file icons.
 - Fast jump to the next/previous changed file (`]f`/`[f`, if they do not
   conflict with other keys).
 - Default key mappings for `:TwintreeToggleTree` and `:TwintreeResetLayout`,

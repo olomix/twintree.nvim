@@ -10,7 +10,7 @@ local function name(win)
 end
 
 local function tree_lines(state)
-  return h.buf_lines(state.tree_buf)
+  return h.tree_lines(state.tree_buf)
 end
 
 ---Press `<CR>` in the tree on the line containing `text`.
@@ -100,7 +100,7 @@ describe("session", function()
       h.commit(repo, "second")
       local state = session.get(assert(twintree.open({ "HEAD~1" })))
       assert.equals(first, state.before.commit)
-      assert.same({ "M a.txt" }, tree_lines(state))
+      assert.same({ "a.txt +1 -3 M" }, tree_lines(state))
     end)
 
     it("uses two worktrees for two revisions", function()
@@ -115,7 +115,7 @@ describe("session", function()
       assert.equals(first, state.before.commit)
       assert.equals(feature, state.after.commit)
       assert.equals(worktree.path(repo, feature), state.after.root)
-      assert.same({ "M a.txt" }, tree_lines(state))
+      assert.same({ "a.txt +1 -3 M" }, tree_lines(state))
 
       state = select(state, "a.txt")
       assert.equals(state.after.root .. "/a.txt", name(state.wins.after))
@@ -207,10 +207,10 @@ describe("session", function()
       local state = session.get(assert(twintree.open()))
       assert.same({
         "▾ src/deep/",
-        "  R c.txt ← src/deep/b.txt",
-        "M a.txt",
-        "D gone.txt",
-        "A new.txt",
+        "│ c.txt ← b.txt +0 -0 R",
+        "a.txt +1 -1 M",
+        "gone.txt +0 -1 D",
+        "new.txt +1 -0 A",
       }, tree_lines(state))
 
       local buf = state.tree_buf
@@ -227,10 +227,10 @@ describe("session", function()
       local state = session.get(assert(twintree.open()))
       assert.same({
         "▾ added/more/ A",
-        "  A x.txt",
+        "│ x.txt +1 -0 A",
         "▾ src/deep/ D",
-        "  D b.txt",
-        "M a.txt",
+        "│ b.txt +0 -4 D",
+        "a.txt +1 -3 M",
       }, tree_lines(state))
 
       state = select(state, "src/deep/")
@@ -252,7 +252,7 @@ describe("session", function()
 
       state = select(state, "src/deep/")
       assert.same(
-        { "▸ src/deep/", "M a.txt", "D gone.txt", "A new.txt" },
+        { "▸ src/deep/", "a.txt +1 -1 M", "gone.txt +0 -1 D", "new.txt +1 -0 A" },
         tree_lines(state)
       )
       assert.equals(state.wins.tree, api.nvim_get_current_win())
@@ -273,7 +273,13 @@ describe("session", function()
 
       state = session.get()
       assert.same(
-        { "▸ src/deep/", "M a.txt", "D gone.txt", "A later.txt", "A new.txt" },
+        {
+          "▸ src/deep/",
+          "a.txt +1 -1 M",
+          "gone.txt +0 -1 D",
+          "later.txt +1 -0 A",
+          "new.txt +1 -0 A",
+        },
         tree_lines(state)
       )
       assert.equals("a.txt", state.selected)
@@ -376,7 +382,8 @@ describe("session", function()
       state = session.get(assert(twintree.open()))
       assert.truthy(vim.tbl_contains(tree_lines(state), "▾ a.txt/ A"))
 
-      state = select(state, "D a.txt")
+      -- With a space: the directory of the same name is listed as `a.txt/`.
+      state = select(state, "a.txt ")
       assert.equals(state.before.root .. "/a.txt", name(state.wins.before))
       assert.equals("twintree://empty", name(state.wins.after))
       assert_diffed()
@@ -385,7 +392,7 @@ describe("session", function()
     it("lists and opens a file whose name contains a newline", function()
       h.write(repo, "odd\nname.txt", "odd\n")
       state = session.get(assert(twintree.open()))
-      assert.truthy(vim.tbl_contains(tree_lines(state), "A odd\\nname.txt"))
+      assert.truthy(vim.tbl_contains(tree_lines(state), "odd\\nname.txt +1 -0 A"))
       assert.is_false(vim.bo[state.tree_buf].modifiable)
 
       state = select(state, "odd\\nname.txt")
@@ -524,7 +531,7 @@ describe("session", function()
       assert.equals(state.before.root .. "/a.txt", name(state.wins.before))
       assert.equals(repo .. "/a.txt", name(state.wins.after))
       assert.is_true(vim.wo[state.wins.before].diff)
-      assert.truthy(vim.tbl_contains(tree_lines(state), "M a.txt"))
+      assert.truthy(vim.tbl_contains(tree_lines(state), "a.txt +1 -1 M"))
     end)
 
     -- Later tests hold references to the original modules.

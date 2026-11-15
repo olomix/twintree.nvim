@@ -3,9 +3,11 @@ local M = {}
 ---@class twintree.Config
 ---@field tree_width integer Width of the changed-files tree window.
 ---@field cache_dir? string Directory for cached worktrees.
+---@field icons boolean Show icons when an icon plugin is installed.
 local defaults = {
   tree_width = 35,
   cache_dir = nil,
+  icons = true,
 }
 
 M.options = vim.deepcopy(defaults)
