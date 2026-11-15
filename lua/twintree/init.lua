@@ -12,9 +12,14 @@ end
 ---
 ---No revisions: HEAD against the working tree. One: its merge-base with HEAD
 ---against the working tree. Two: their merge-base against the second.
+---
+---The first file of the tree is shown in both panes, with the cursor in the
+---after pane. When it is not opened, the session is open all the same: the
+---tab is returned together with the reason, which the caller should report.
 ---@param revs? string[]
----@return integer? tab tabpage of the session
----@return string? err
+---@return integer? tab tabpage of the session, nil when it did not open
+---@return string? err why it did not open or, with a tab, why the first
+---  file is not shown
 function M.open(revs)
   local git = require("twintree.git")
   local session = require("twintree.session")

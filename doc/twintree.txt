@@ -263,6 +263,10 @@ Lua API: >lua
     require("twintree").open({ "main" })  -- same as :Twintree main
     require("twintree").clean()           -- same as :TwintreeClean
 <
+`open()` returns the tabpage of the diff, or nil and a message when the diff
+did not open. When the diff opened but its first file was not shown, it
+returns both the tabpage and the message; `:Twintree` prints it.
+
 ==============================================================================
 WORKTREES                                                  *twintree-worktrees*
 
