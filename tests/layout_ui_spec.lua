@@ -594,6 +594,52 @@ describe("layout", function()
       assert_original_view()
     end)
 
+    it("keeps the tab when an autocommand closes the window listed last", function()
+      -- With a second tab, closing the only window of a tab closes the tab.
+      vim.cmd.tabnew()
+      api.nvim_set_current_tabpage(tab)
+      select("a.txt")
+      vim.cmd("botright split")
+      local last = api.nvim_get_current_win()
+      local wins = api.nvim_tabpage_list_wins(tab)
+      assert.equals(last, wins[#wins])
+      local id = api.nvim_create_autocmd("WinClosed", {
+        callback = function()
+          if api.nvim_win_is_valid(last) then
+            api.nvim_win_close(last, true)
+          end
+        end,
+      })
+
+      local ok, result = pcall(twintree.reset_layout)
+      api.nvim_del_autocmd(id)
+      assert.is_true(ok, tostring(result))
+      assert.is_true(result)
+      assert.is_true(api.nvim_tabpage_is_valid(tab))
+      assert.equals(tab, api.nvim_get_current_tabpage())
+      assert_original_view()
+      assert_showing("a.txt")
+    end)
+
+    it("reports a diff tab that an autocommand closed during the reset", function()
+      vim.cmd.tabnew()
+      api.nvim_set_current_tabpage(tab)
+      local id = api.nvim_create_autocmd("WinClosed", {
+        callback = function()
+          if api.nvim_tabpage_is_valid(tab) then
+            vim.cmd("silent! tabclose! " .. api.nvim_tabpage_get_number(tab))
+          end
+        end,
+      })
+
+      local ok, result, err = pcall(twintree.reset_layout)
+      api.nvim_del_autocmd(id)
+      assert.is_true(ok, tostring(result))
+      assert.is_nil(result)
+      assert.equals("the diff tab was closed while its layout was reset", err)
+      assert.is_false(api.nvim_tabpage_is_valid(tab))
+    end)
+
     it("works in a tab that has no room for another window", function()
       select("a.txt")
       api.nvim_set_current_win(state().wins.after)

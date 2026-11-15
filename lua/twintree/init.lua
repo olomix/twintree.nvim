@@ -175,26 +175,54 @@ function M.reset_layout()
     return nil, err
   end
 
-  -- Close all but one window first: a tab filled with splits has no room
-  -- for another one. The last one goes once the tree window exists.
-  local old_wins = session.layout_wins(tab)
-  local last = table.remove(old_wins)
-  for _, win in ipairs(old_wins) do
-    close_keeping_buffer(win)
+  local GONE = "the diff tab was closed while its layout was reset"
+  local function tab_is_current()
+    return vim.api.nvim_tabpage_is_valid(tab)
+      and vim.api.nvim_get_current_tabpage() == tab
   end
+
+  -- Close windows until one is left: a tab filled with splits has no room
+  -- for another one. The list is read again each time, because closing a
+  -- window can make an autocommand of the user close others, and closing
+  -- the last window of a tab would close the tab.
+  for _ = 1, #session.layout_wins(tab) do
+    local wins = session.layout_wins(tab)
+    if #wins <= 1 then
+      break
+    end
+    close_keeping_buffer(wins[1])
+    if not tab_is_current() then
+      return nil, GONE
+    end
+  end
+
   -- A new window, not the remaining old one: that belongs to the user.
+  buf, err = treeview.ensure_buf(tab)
+  if not buf then
+    return nil, err
+  end
   local tree_win
   tree_win, err = open_tree(buf)
   if not tree_win then
     return nil, err
   end
-  close_keeping_buffer(last)
+  for _, win in ipairs(session.layout_wins(tab)) do
+    if win ~= tree_win then
+      close_keeping_buffer(win)
+    end
+  end
+  if not tab_is_current() or not vim.api.nvim_win_is_valid(tree_win) then
+    return nil, GONE
+  end
   local ok, before_win, after_win = pcall(session.open_panes, tree_win)
   if not ok then
     return nil, "no room for the panes: " .. tostring(before_win)
   end
 
-  local state = assert(session.get(tab))
+  local state = session.get(tab)
+  if not state then
+    return nil, GONE
+  end
   state.wins = { tree = tree_win, before = before_win, after = after_win }
   state.layout = session.default_layout()
   state.bufs = nil

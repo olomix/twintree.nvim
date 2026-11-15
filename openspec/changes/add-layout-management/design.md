@@ -195,11 +195,14 @@ error level, like `:Twintree`.
 `require("twintree").reset_layout()` returns `true` or `nil, err`.
 
 1. No session: `nil, "no diff session in this tab"`.
-2. Close every non-floating window of the tab but one. A tab filled with
-   splits has no room for another window, so the tree cannot be opened
-   first.
+2. Close non-floating windows of the tab until one is left. A tab filled
+   with splits has no room for another window, so the tree cannot be opened
+   first. The list of windows is read again before each close: closing a
+   window can make an autocommand of the user close others, and a list taken
+   at the start could lead to closing the last window, which closes the tab.
 3. Open a new far-left window with the tree buffer, as in decision 6, then
-   close the remaining old window. Windows are closed with
+   close every other window that is still there. If the tab itself was
+   closed by such an autocommand, return a message and touch nothing else. Windows are closed with
    `nvim_win_close(win, true)`, which hides a modified buffer instead of
    failing. A buffer whose `bufhidden` would remove it is set to `hide` for
    the moment of closing and gets its setting back afterwards, so nothing is

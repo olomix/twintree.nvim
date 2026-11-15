@@ -206,7 +206,14 @@ panes in diff mode.
 #### Scenario: Windows closed by an autocommand
 - **WHEN** an autocommand of the user closes another window of the tab while
   the reset is closing windows
-- **THEN** the reset completes without a Lua error
+- **THEN** the reset completes with the three windows of the original view,
+  the diff tab still exists, and no Lua error is raised
+
+#### Scenario: Tab closed by an autocommand
+- **WHEN** an autocommand of the user closes the diff tab itself while the
+  reset is closing windows
+- **THEN** a message says the diff tab was closed, no window is opened in
+  another tab, and no Lua error is raised
 
 ### Requirement: Commands outside a diff tab
 `:TwintreeToggleTree` and `:TwintreeResetLayout` SHALL report an error
