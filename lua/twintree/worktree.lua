@@ -143,6 +143,20 @@ function M.clean(repo, in_use)
   return removed
 end
 
+---Path with symbolic links resolved, also for a file that does not exist.
+---@param path string
+---@return string
+function M.resolve(path)
+  local resolved = vim.uv.fs_realpath(path)
+  if resolved then
+    return resolved
+  end
+  -- A new file does not exist yet; resolve its directory instead.
+  local dir = vim.uv.fs_realpath(vim.fs.dirname(path))
+  return dir and vim.fs.joinpath(dir, vim.fs.basename(path))
+    or vim.fs.normalize(path)
+end
+
 ---@param path string
 ---@return boolean
 function M.is_cached(path)
@@ -153,14 +167,7 @@ function M.is_cached(path)
   if not cache then
     return false
   end
-  local resolved = vim.uv.fs_realpath(path)
-  if not resolved then
-    -- A new file does not exist yet; resolve its directory instead.
-    local dir = vim.uv.fs_realpath(vim.fs.dirname(path))
-    resolved = dir and vim.fs.joinpath(dir, vim.fs.basename(path))
-      or vim.fs.normalize(path)
-  end
-  return vim.startswith(resolved, cache .. "/")
+  return vim.startswith(M.resolve(path), cache .. "/")
 end
 
 ---Keep a cached worktree file from using a swap file. The cache is shared

@@ -406,6 +406,8 @@ describe("layout", function()
 
     it("shows the tree at its width when it was hidden without a size change", function()
       local other = api.nvim_create_buf(false, true)
+      -- Only a user who switched the option off can replace the tree.
+      vim.wo[tree()].winfixbuf = false
       api.nvim_win_set_buf(tree(), other)
       assert.is_nil(session.tree_win(state()))
       assert.is_true(state().layout.tree_shown)
@@ -485,8 +487,8 @@ describe("layout", function()
       select("a.txt")
       local s = state()
       api.nvim_set_current_win(s.wins.before)
-      vim.cmd.edit(s.before.root .. "/src/b.txt")
       vim.cmd("vsplit")
+      vim.cmd.edit(s.before.root .. "/src/b.txt")
       vim.cmd("botright split")
       vim.cmd("topleft vnew")
 

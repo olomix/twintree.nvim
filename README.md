@@ -60,10 +60,25 @@ after.
 Files are shown in full; unchanged lines are not folded. Press `zi` in a
 pane to switch folding on and see only the changes with context.
 
-The panes are normal windows. Jump to a definition and diff mode is switched
-off in that pane; return to the file and it is switched on again. When the
-after side is the working tree it is your checkout and can be edited.
-Worktree files are read-only.
+The panes are normal windows, and they stay a diff wherever you go. Jump to
+a definition or a reference, open a quickfix entry or `:edit` a file in one
+pane, and the other pane shows the same file from its side. This also works
+for files that did not change, which then show no differences. The file is
+marked in the tree when it is one of the changed files.
+
+- A file always goes to the pane of its side. An entry of the before side
+  opened while the cursor is in the after pane appears in the before pane,
+  and the cursor follows it.
+- A file outside both sides, such as a dependency, is shown in both panes.
+- A buffer that is not a file, such as a terminal, gets a plain pane.
+- The tree window only shows the tree; `:edit` there is refused, and a
+  quickfix entry opened from it goes to the panes.
+
+To keep another file next to the diff, open a window of your own with
+`:split`. Such a window does not follow and is not part of the diff.
+
+When the after side is the working tree it is your checkout and can be
+edited. Worktree files are read-only.
 
 ### Closing the diff
 

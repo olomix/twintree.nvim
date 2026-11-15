@@ -150,9 +150,7 @@ function M.activate()
     local ok, err = session.show(tab, line.entry)
     if not ok then
       vim.notify("twintree: " .. err, vim.log.levels.ERROR)
-      return
     end
-    M.draw(tab)
   end
 end
 
@@ -170,16 +168,11 @@ function M.refresh()
     return
   end
 
-  local still_listed = false
-  for _, entry in ipairs(entries) do
-    if entry.path == state.selected then
-      still_listed = true
-    end
-  end
-  if state.selected and not still_listed then
-    session.clear_selection(tab)
-  end
-  M.set_entries(tab, entries)
+  vim.b[state.tree_buf].twintree_entries = entries
+  -- The panes keep their files; only the mark depends on the new list.
+  state.selected = state.pair and session.entry_path(state, state.pair)
+  session.save(tab, state)
+  M.draw(tab)
 end
 
 ---The tree buffer of a session, rebuilt when the user deleted it.
@@ -223,23 +216,6 @@ function M.focus_selected(tab, win)
       return
     end
   end
-end
-
----The changed file of a session with the given path.
----@param tab integer
----@param path string
----@return twintree.Entry?
-function M.entry(tab, path)
-  local state = session.get(tab)
-  if not state or not M.is_tree_buf(state.tree_buf) then
-    return nil
-  end
-  for _, entry in ipairs(entries_of(state.tree_buf)) do
-    if entry.path == path then
-      return entry
-    end
-  end
-  return nil
 end
 
 ---Delete tree buffers whose diff tab is gone.

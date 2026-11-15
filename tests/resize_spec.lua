@@ -17,8 +17,23 @@ local WIDTHS = [[
   }
 ]]
 
+local PANES = [[
+  local state = require("twintree.session").get(...)
+  local function pane(name)
+    local win = state.wins[name]
+    return {
+      file = vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win)),
+      line = vim.api.nvim_win_get_cursor(win)[1],
+      text = vim.api.nvim_win_call(win, vim.api.nvim_get_current_line),
+      diff = vim.wo[win].diff,
+      current = vim.api.nvim_get_current_win() == win,
+    }
+  end
+  return { before = pane("before"), after = pane("after"), root = state.before.root }
+]]
+
 describe("in a real terminal", function()
-  local job, chan, tab
+  local job, chan, tab, repo
 
   local function lua(code, ...)
     return vim.rpcrequest(chan, "nvim_exec_lua", code, { ... })
@@ -63,8 +78,14 @@ describe("in a real terminal", function()
   end
 
   before_each(function()
-    local repo = h.repo({ ["a.txt"] = "one\n" })
+    local long = {}
+    for i = 1, 200 do
+      long[i] = "line " .. i
+    end
+    local text = table.concat(long, "\n") .. "\n"
+    repo = h.repo({ ["a.txt"] = "one\n", ["long.txt"] = text })
     h.write(repo, "a.txt", "two\n")
+    h.write(repo, "long.txt", ("added\n"):rep(10) .. text)
     local socket = vim.fn.tempname()
 
     local ok, id = pcall(vim.fn.jobstart, {
@@ -248,5 +269,51 @@ describe("in a real terminal", function()
       local now = w.before / (w.before + w.after)
       return w.tree == vim.NIL and math.abs(now - ratio) < 0.02
     end, "after closing the tree")
+  end)
+
+  pty_it("puts a quickfix entry opened from the other pane into the pane of its side", function()
+    local root = lua(PANES, tab).root
+    -- A quickfix jump avoids windows that show the empty placeholder.
+    lua([[require("twintree.session").show(..., { path = "a.txt" })]], tab)
+    lua("vim.fn.setqflist({ { filename = ..., lnum = 120, col = 1 } })", root .. "/long.txt")
+    focus("after")
+    press(":copen<CR>")
+    -- Record every redraw in which the after pane shows a before side
+    -- file: the file must be moved before the screen is drawn.
+    lua(
+      [[
+        local tab, root = ...
+        local after = require("twintree.session").get(tab).wins.after
+        vim.g.drawn_in_wrong_pane = 0
+        local ns = vim.api.nvim_create_namespace("twintree_test")
+        vim.api.nvim_set_decoration_provider(ns, {
+          on_win = function(_, win, buf)
+            local name = vim.api.nvim_buf_get_name(buf)
+            if win == after and vim.startswith(name, root .. "/") then
+              vim.g.drawn_in_wrong_pane = vim.g.drawn_in_wrong_pane + 1
+            end
+          end,
+        })
+      ]],
+      tab,
+      root
+    )
+    press("<CR>")
+
+    local last
+    local ok = vim.wait(5000, function()
+      last = lua(PANES, tab)
+      return last.before.file == root .. "/long.txt"
+        and last.before.current
+        and last.before.line == 120
+        -- Ten lines were added above it on the after side.
+        and last.after.line == 130
+    end, 50)
+    assert(ok, "panes after the jump: " .. vim.inspect(last))
+    assert.equals(repo .. "/long.txt", last.after.file)
+    assert.equals("line 120", last.after.text)
+    assert.is_true(last.before.diff)
+    assert.is_true(last.after.diff)
+    assert.equals(0, lua("return vim.g.drawn_in_wrong_pane"))
   end)
 end)

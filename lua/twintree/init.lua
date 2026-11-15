@@ -228,9 +228,9 @@ function M.reset_layout()
   state.bufs = nil
   session.save(tab, state)
 
-  local entry = state.selected and treeview.entry(tab, state.selected)
-  if entry then
-    session.show(tab, entry)
+  if state.pair then
+    session.show_pair(tab, state.pair)
+    vim.api.nvim_set_current_win(after_win)
   else
     session.clear_selection(tab)
     vim.api.nvim_set_current_win(tree_win)

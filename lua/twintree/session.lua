@@ -1,4 +1,5 @@
 local config = require("twintree.config")
+local worktree = require("twintree.worktree")
 
 local M = {}
 
@@ -13,10 +14,18 @@ local M = {}
 ---@field after twintree.Side
 ---@field wins { tree: integer, before: integer, after: integer }
 ---@field tree_buf integer
----@field selected? string path of the selected file
----@field bufs? { before: integer, after: integer } buffers of the selected file
+---@field selected? string path of the tree entry the panes compare
+---@field pair? twintree.Pair files the panes compare
+---@field bufs? { before: integer, after: integer } buffers of that pair
 ---@field collapsed table<string, boolean>
 ---@field layout twintree.Layout
+
+---Absolute paths of the two files under comparison. A side without a file
+---shows the placeholder. Paths, not buffers: a buffer can be deleted while
+---the comparison has to survive a layout reset.
+---@class twintree.Pair
+---@field before? string
+---@field after? string
 
 ---What the window sizes of the tab are meant to be.
 ---@class twintree.Layout
@@ -58,6 +67,12 @@ function M.get(tab)
   state.collapsed = state.collapsed or {}
   -- Sessions opened by an older version of the plugin have no layout.
   state.layout = state.layout or M.default_layout()
+  -- Nor do they have a pair.
+  if state.selected and not state.pair then
+    state.pair = M.entry_pair(state, M.find_entry(state, state.selected) or {
+      path = state.selected,
+    })
+  end
   return state
 end
 
@@ -123,6 +138,8 @@ function M.setup_tree_window(win)
   wo.wrap = false
   wo.cursorline = true
   vim.wo[win].winfixwidth = true
+  -- Jumps made from the tree open in a pane instead of replacing the tree.
+  vim.wo[win].winfixbuf = true
 end
 
 ---Create the two pane windows to the right of the tree and size all three.
@@ -190,6 +207,8 @@ function M.create(repo, before, after, tree_buf)
   local tab = vim.api.nvim_get_current_tabpage()
   local tree_win = vim.api.nvim_get_current_win()
   vim.bo[vim.api.nvim_get_current_buf()].bufhidden = "wipe"
+  -- The last window of an earlier diff keeps the option of its tree.
+  vim.wo[tree_win].winfixbuf = false
   vim.api.nvim_win_set_buf(tree_win, tree_buf)
 
   M.setup_tree_window(tree_win)
@@ -224,16 +243,239 @@ local function set_diff(win, enable)
   end)
 end
 
-local function file_buf(root, path)
-  local full = vim.fs.joinpath(root, path)
-  local stat = vim.uv.fs_stat(full)
+---@param path string
+---@return boolean
+local function is_file(path)
+  local stat = vim.uv.fs_stat(path)
   -- A file can be replaced by a directory of the same name, and vice versa.
-  if not stat or stat.type ~= "file" then
+  return stat ~= nil and stat.type == "file"
+end
+
+---@param state twintree.Session
+---@return twintree.Entry[]
+local function entries_of(state)
+  if not vim.api.nvim_buf_is_valid(state.tree_buf) then
+    return {}
+  end
+  return vim.b[state.tree_buf].twintree_entries or {}
+end
+
+---The changed file of a session with the given path.
+---@param state twintree.Session
+---@param path string
+---@return twintree.Entry?
+function M.find_entry(state, path)
+  for _, entry in ipairs(entries_of(state)) do
+    if entry.path == path then
+      return entry
+    end
+  end
+  return nil
+end
+
+---@param state twintree.Session
+---@param entry twintree.Entry
+---@return twintree.Pair
+function M.entry_pair(state, entry)
+  local before = vim.fs.joinpath(state.before.root, entry.old_path or entry.path)
+  local after = vim.fs.joinpath(state.after.root, entry.path)
+  return {
+    before = is_file(before) and before or nil,
+    after = is_file(after) and after or nil,
+  }
+end
+
+---Whether a buffer can have a counterpart on the other side.
+---@param buf integer
+---@return boolean
+function M.is_file_buf(buf)
+  return vim.bo[buf].buftype == "" and vim.api.nvim_buf_get_name(buf) ~= ""
+end
+
+---The side a file belongs to, and its path inside that side.
+---@param state twintree.Session
+---@param path string
+---@param prefer? "before"|"after" side that wins when both have one root
+---@return ("before"|"after")? side nil for a file outside both sides
+---@return string? rel
+function M.side_of(state, path, prefer)
+  local function match(candidate)
+    local side
+    for _, pane in ipairs(PANES) do
+      local root = state[pane].root
+      if vim.startswith(candidate, root .. "/") then
+        local longer = side and #root > #state[side].root
+        local tie = side and #root == #state[side].root and pane == prefer
+        if not side or longer or tie then
+          side = pane
+        end
+      end
+    end
+    if side then
+      return side, candidate:sub(#state[side].root + 2)
+    end
+  end
+  local side, rel = match(vim.fs.normalize(path))
+  if not side then
+    -- The roots are resolved paths; the name of a buffer need not be.
+    side, rel = match(worktree.resolve(path))
+  end
+  return side, rel
+end
+
+---The pair a file belongs to: itself and its counterpart on the other side.
+---@param state twintree.Session
+---@param path string absolute path of a file
+---@param prefer? "before"|"after"
+---@return twintree.Pair
+function M.pair_of(state, path, prefer)
+  local side, rel = M.side_of(state, path, prefer)
+  if not side then
+    return { before = path, after = path }
+  end
+  local other_rel = rel
+  local entries = entries_of(state)
+  if side == "before" then
+    for _, entry in ipairs(entries) do
+      if entry.old_path == rel then
+        other_rel = entry.path
+        break
+      end
+    end
+  else
+    for _, entry in ipairs(entries) do
+      if entry.path == rel then
+        other_rel = entry.old_path or rel
+        break
+      end
+    end
+  end
+  local other = side == "before" and "after" or "before"
+  local counterpart = vim.fs.joinpath(state[other].root, other_rel)
+  return {
+    [side] = path,
+    [other] = is_file(counterpart) and counterpart or nil,
+  }
+end
+
+---Path of the tree entry a pair is the comparison of, if it has one.
+---@param state twintree.Session
+---@param pair twintree.Pair
+---@return string?
+function M.entry_path(state, pair)
+  local rel = {}
+  for _, pane in ipairs(PANES) do
+    if pair[pane] then
+      local side, path = M.side_of(state, pair[pane], pane)
+      rel[pane] = side == pane and path or nil
+    end
+  end
+  for _, entry in ipairs(entries_of(state)) do
+    if rel.after and entry.path == rel.after then
+      return entry.path
+    end
+    if rel.before and (entry.old_path or entry.path) == rel.before then
+      return entry.path
+    end
+  end
+  return nil
+end
+
+---@param state twintree.Session
+---@param win integer
+---@return ("before"|"after")?
+local function pane_of(state, win)
+  for _, pane in ipairs(PANES) do
+    if state.wins[pane] == win then
+      return pane
+    end
+  end
+  return nil
+end
+
+---Take a buffer that no window shows out of the diff. Neovim keeps a
+---buffer that was hidden in a diff window as a participant, which would
+---make the next pair a three-way diff.
+---@param buf integer
+local function leave_diff(buf)
+  if
+    vim.api.nvim_buf_is_loaded(buf)
+    and #vim.fn.win_findbuf(buf) == 0
+  then
+    vim.api.nvim_buf_call(buf, function()
+      vim.cmd("diffoff")
+    end)
+  end
+end
+
+---@param path? string
+---@return integer
+local function pair_buf(path)
+  if not path then
     return M.placeholder()
   end
-  local buf = vim.fn.bufadd(full)
+  local buf = vim.fn.bufadd(path)
   vim.bo[buf].buflisted = true
   return buf
+end
+
+---Show a pair of files in the panes, diffed against each other, and mark
+---its entry in the tree.
+---@param tab integer
+---@param pair twintree.Pair
+---@param opts? { keepalt?: "before"|"after" } pane whose alternate file
+---  must not change
+---@return boolean ok
+---@return string? err
+function M.show_pair(tab, pair, opts)
+  local state = M.get(tab)
+  if not state then
+    return false, M.NO_SESSION
+  end
+  if not M.has_panes(state) then
+    return false, M.BROKEN_LAYOUT
+  end
+
+  local replaced = state.bufs or {}
+  state.pair = pair
+  state.selected = M.entry_path(state, pair)
+  state.bufs = { before = pair_buf(pair.before), after = pair_buf(pair.after) }
+  -- Saved before any window changes: the events fired below find the
+  -- buffers recorded and do not follow them again.
+  M.save(tab, state)
+
+  local keepalt = opts and opts.keepalt
+  -- The pane that keeps its alternate file comes last: the buffer leaving
+  -- it is then already shown in the other pane and is never hidden.
+  local order = keepalt == "before" and { "after", "before" } or PANES
+  for _, pane in ipairs(order) do
+    local win, buf = state.wins[pane], state.bufs[pane]
+    set_diff(win, false)
+    if vim.api.nvim_win_get_buf(win) ~= buf then
+      local kept = keepalt == pane
+        and pcall(vim.api.nvim_win_call, win, function()
+          vim.cmd("keepalt buffer " .. buf)
+        end)
+      if not kept then
+        vim.api.nvim_win_set_buf(win, buf)
+      end
+    end
+  end
+  for _, pane in ipairs(PANES) do
+    leave_diff(replaced[pane] or state.bufs[pane])
+  end
+  for _, pane in ipairs(PANES) do
+    set_diff(state.wins[pane], true)
+  end
+
+  -- Required here, not at the top: the tree view requires this module.
+  local treeview = require("twintree.treeview")
+  treeview.draw(tab)
+  local tree_win = M.tree_win(state)
+  if tree_win then
+    treeview.focus_selected(tab, tree_win)
+  end
+  return true
 end
 
 ---Show a changed file in both panes, diffed against each other.
@@ -246,30 +488,15 @@ function M.show(tab, entry)
   if not state then
     return false, M.NO_SESSION
   end
-  if not M.has_panes(state) then
-    return false, M.BROKEN_LAYOUT
-  end
-
-  state.selected = entry.path
-  state.bufs = {
-    before = file_buf(state.before.root, entry.old_path or entry.path),
-    after = file_buf(state.after.root, entry.path),
-  }
-  M.save(tab, state)
-
-  for _, pane in ipairs(PANES) do
-    local win = state.wins[pane]
-    set_diff(win, false)
-    vim.api.nvim_win_set_buf(win, state.bufs[pane])
-  end
-  for _, pane in ipairs(PANES) do
-    set_diff(state.wins[pane], true)
+  local ok, err = M.show_pair(tab, M.entry_pair(state, entry))
+  if not ok then
+    return false, err
   end
   vim.api.nvim_set_current_win(state.wins.after)
   return true
 end
 
----Forget the selected file and leave diff mode in both panes.
+---Forget the compared files and leave diff mode in both panes.
 ---@param tab integer
 function M.clear_selection(tab)
   local state = M.get(tab)
@@ -277,6 +504,7 @@ function M.clear_selection(tab)
     return
   end
   state.selected = nil
+  state.pair = nil
   state.bufs = nil
   M.save(tab, state)
   for _, pane in ipairs(PANES) do
@@ -286,21 +514,92 @@ function M.clear_selection(tab)
   end
 end
 
----Keep diff mode on only while a pane shows its selected file, so that
----navigating elsewhere (go-to-definition) gives a plain window.
-function M.sync_diff()
+---Take a new window of a diff tab out of diff mode, unless it is a pane.
+---A window split off a pane copies its diff mode and would join the
+---comparison as a third participant.
+function M.undiff_new_window()
   local win = vim.api.nvim_get_current_win()
   local state = M.get(vim.api.nvim_win_get_tabpage(win))
-  if not state then
+  if state and not pane_of(state, win) then
+    set_diff(win, false)
+  end
+end
+
+---Put a file that landed in the pane of the other side into its own pane,
+---with the view it had, and show its counterpart where it landed.
+---@param tab integer
+---@param win integer window the file landed in
+---@param buf integer
+local function move_to_own_pane(tab, win, buf)
+  if not vim.api.nvim_tabpage_is_valid(tab) then
     return
   end
-  for _, pane in ipairs(PANES) do
-    if state.wins[pane] == win then
-      local selected = state.bufs and state.bufs[pane]
-      set_diff(win, selected == vim.api.nvim_win_get_buf(win))
-      return
-    end
+  local state = M.get(tab)
+  if
+    not state
+    or not M.has_panes(state)
+    or not vim.api.nvim_buf_is_valid(buf)
+    or vim.api.nvim_win_get_buf(win) ~= buf
+  then
+    return
   end
+  local landing = pane_of(state, win)
+  local path = vim.api.nvim_buf_get_name(buf)
+  local side = M.side_of(state, path, landing)
+  if not landing or not side or side == landing then
+    return
+  end
+
+  local view = vim.api.nvim_win_call(win, vim.fn.winsaveview)
+  local was_current = vim.api.nvim_get_current_win() == win
+  local own = state.wins[side]
+  M.show_pair(tab, M.pair_of(state, path, landing), { keepalt = landing })
+  vim.api.nvim_win_call(own, function()
+    vim.fn.winrestview(view)
+  end)
+  if was_current then
+    vim.api.nvim_set_current_win(own)
+  end
+end
+
+---Keep the panes comparing whatever file one of them is taken to: the
+---other pane shows the same file from its side. Buffers that are not files
+---get a plain window.
+function M.follow()
+  local win = vim.api.nvim_get_current_win()
+  local tab = vim.api.nvim_win_get_tabpage(win)
+  local state = M.get(tab)
+  local pane = state and pane_of(state, win)
+  if not state or not pane then
+    return
+  end
+  local buf = vim.api.nvim_win_get_buf(win)
+  if state.bufs and state.bufs[pane] == buf then
+    set_diff(win, true)
+    return
+  end
+  if not M.is_file_buf(buf) or not M.has_panes(state) then
+    set_diff(win, false)
+    return
+  end
+
+  local path = vim.api.nvim_buf_get_name(buf)
+  local side = M.side_of(state, path, pane)
+  if side and side ~= pane then
+    set_diff(win, false)
+    -- The command that brought the file places the cursor after this event,
+    -- so the move has to wait. SafeState comes before the screen is drawn
+    -- and spares a flash of the file in the wrong pane; it does not fire
+    -- for a jump made by a mapping or a callback, which the scheduled call
+    -- covers. Whichever runs second finds the file moved and does nothing.
+    local function move()
+      move_to_own_pane(tab, win, buf)
+    end
+    vim.api.nvim_create_autocmd("SafeState", { once = true, callback = move })
+    vim.schedule(move)
+    return
+  end
+  M.show_pair(tab, M.pair_of(state, path, pane))
 end
 
 ---Worktree roots used by open sessions.

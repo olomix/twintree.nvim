@@ -280,7 +280,7 @@ describe("session", function()
       assert.is_true(vim.wo[state.wins.before].diff)
     end)
 
-    it("drops the selection when the file is no longer changed", function()
+    it("drops the mark but keeps the panes when the file is no longer changed", function()
       dirty()
       local state = session.get(assert(twintree.open()))
       state = select(state, "new.txt")
@@ -291,7 +291,8 @@ describe("session", function()
 
       state = session.get()
       assert.is_nil(state.selected)
-      assert.is_false(vim.wo[state.wins.after].diff)
+      assert.equals(repo .. "/new.txt", name(state.wins.after))
+      assert.is_true(vim.wo[state.wins.after].diff)
     end)
   end)
 
@@ -434,20 +435,22 @@ describe("session", function()
       assert.is_true(is_changed(1))
     end)
 
-    it("leaves diff mode while a pane shows another file", function()
+    it("stays in diff mode when a pane is taken to another file", function()
       state = select(state, "a.txt")
       local before = state.wins.before
+      local first_buf = state.bufs.before
 
       api.nvim_set_current_win(before)
       vim.cmd.edit(state.before.root .. "/gone.txt")
-      assert.is_false(vim.wo[before].diff)
-      assert.is_false(vim.wo[before].scrollbind)
-      assert.is_false(vim.bo.modifiable)
-      assert.is_true(vim.wo[state.wins.after].diff)
-
-      vim.cmd.buffer(state.bufs.before)
       assert.is_true(vim.wo[before].diff)
       assert.is_true(vim.wo[before].scrollbind)
+      assert.is_false(vim.bo.modifiable)
+      assert.equals("twintree://empty", name(state.wins.after))
+      assert.is_true(vim.wo[state.wins.after].diff)
+
+      vim.cmd.buffer(first_buf)
+      assert.is_true(vim.wo[before].diff)
+      assert.equals(repo .. "/a.txt", name(state.wins.after))
     end)
 
     it("reports a layout that was taken apart", function()

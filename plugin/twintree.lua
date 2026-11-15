@@ -64,9 +64,20 @@ vim.api.nvim_create_autocmd({ "BufReadPost", "BufNewFile" }, {
 
 vim.api.nvim_create_autocmd({ "BufWinEnter", "BufEnter" }, {
   group = group,
-  desc = "Diff a pane only while it shows the selected file",
+  desc = "Show in both panes the file one of them is taken to",
+  -- Nested, so that the file loaded into the other pane gets its filetype
+  -- and the read-only protection of cached worktrees.
+  nested = true,
   callback = function()
-    require("twintree.session").sync_diff()
+    require("twintree.session").follow()
+  end,
+})
+
+vim.api.nvim_create_autocmd("WinNew", {
+  group = group,
+  desc = "Keep a window split off a pane out of the diff",
+  callback = function()
+    require("twintree.session").undiff_new_window()
   end,
 })
 

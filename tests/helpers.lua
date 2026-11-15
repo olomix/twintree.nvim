@@ -45,6 +45,8 @@ end
 function M.reset()
   vim.cmd("silent! tabonly!")
   vim.cmd("silent! only!")
+  -- Left set when the remaining window was the tree of a diff.
+  vim.wo.winfixbuf = false
   vim.cmd("silent! %bwipeout!")
   vim.t.twintree = nil
   local cache = M.tmpdir()
