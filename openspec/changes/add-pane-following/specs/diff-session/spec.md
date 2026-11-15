@@ -145,6 +145,12 @@ the panes, and a window split off a pane SHALL NOT be in diff mode.
   panes, and the changes highlighted in the panes stay the same when the
   new window shows another file
 
+#### Scenario: Pane moves on while another window shows its old file
+- **WHEN** a window split off a pane, or a window in another tab, still
+  shows the file a pane compared, and that pane is taken to another file
+- **THEN** the panes highlight only the differences between the two sides
+  of the new file, and a file that did not change shows none
+
 ### Requirement: The selected file is the file the panes show
 The selected file of a session SHALL be the file the panes currently
 compare, whether the user chose it in the tree or reached it by navigation.

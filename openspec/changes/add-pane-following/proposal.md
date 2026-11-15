@@ -71,6 +71,7 @@ None.
 - Tests: `tests/session_spec.lua` and `tests/layout_ui_spec.lua` contain
   cases that rely on the old rule or put another buffer into the tree
   window; a new spec file covers following.
-- `README.md`: the section that says diff mode is switched off after a jump.
+- `README.md` and `doc/twintree.txt`: the sections that say diff mode is
+  switched off after a jump.
 - No new dependencies. `winfixbuf` needs Neovim 0.10; the plugin already
   requires 0.11.

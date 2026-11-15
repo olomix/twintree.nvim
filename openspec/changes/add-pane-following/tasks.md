@@ -57,6 +57,9 @@
   leaves one handler and that following still works afterwards
 - [x] 3.9 Switch diff mode off in a new window of a diff tab that is not a
   pane; verify with a test for "Split of a pane is not part of the diff"
+- [x] 3.10 Take a buffer that left a pane out of the diff of the tab unless
+  a diff window there still shows it; verify with tests for "Pane moves on
+  while another window shows its old file", for a split and for another tab
 
 ## 4. Put a file into the pane of its side
 
@@ -106,3 +109,7 @@
   `:split`; verify the text matches the behaviour covered by the tests
 - [x] 7.4 Run `make test` and `openspec validate add-pane-following
   --strict`; verify both pass
+- [x] 7.5 Describe following, the tree window and `:split` in
+  `doc/twintree.txt` in place of the text about diff mode being switched
+  off, and bring the `:TwintreeResetLayout` entry up to date; verify
+  `:helptags doc` reports no error and the text matches the README
