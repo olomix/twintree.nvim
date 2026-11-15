@@ -46,6 +46,11 @@ COMMANDS                                                    *twintree-commands*
     main. When rev1 is an ancestor of the other side, the merge-base is rev1
     itself, so `:Twintree HEAD~3` compares with exactly that commit.
 
+    The diff opens with the first file of the tree shown in both panes, as
+    after `<CR>` on its line, and the cursor in the after pane. When nothing
+    changed, or when that file is not opened (see |twintree-swap|), the
+    panes are empty and the cursor is in the tree.
+
     The diff opens in a new tab. When Neovim was just started and shows only
     an empty buffer, that tab is used instead: >
 
@@ -179,7 +184,9 @@ Delete it is not offered while the process that owns the swap file is
 running.
 
 After Quit or Abort the file is not opened and one line says so. After a
-selection in the tree, the panes show what they showed before. After a jump
+selection in the tree, the panes show what they showed before. When it was
+the file a diff opens with, the diff still opens, with empty panes and the
+cursor in the tree, and the file can be selected again. After a jump
 in a pane, that pane keeps the file you went to, without diff mode, and the
 other pane keeps its file; going back restores the diff, and going to the
 file again asks again.

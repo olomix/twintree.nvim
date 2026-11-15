@@ -62,8 +62,6 @@ describe("swap files", function()
     h.reset()
     vim.o.columns = 160
     repo = h.repo({ ["a.txt"] = "one\n", ["b.txt"] = "b\n", ["c.txt"] = "c\n" })
-    h.write(repo, "a.txt", "two\n")
-    h.write(repo, "b.txt", "B\n")
     api.nvim_set_current_dir(repo)
 
     swap_dir = h.tmpdir()
@@ -80,7 +78,12 @@ describe("swap files", function()
       table.insert(messages, { msg = msg, level = level })
     end
 
+    -- Opened before the files change, so that the panes start empty and no
+    -- file of the specs is loaded yet.
     tab = assert(twintree.open())
+    h.write(repo, "a.txt", "two\n")
+    h.write(repo, "b.txt", "B\n")
+    require("twintree.treeview").refresh()
   end)
 
   after_each(function()
@@ -419,6 +422,86 @@ describe("swap files", function()
       )
       assert.truthy(asked[1].text:find("(STILL RUNNING)", 1, true))
       assert_pair("a.txt")
+    end)
+  end)
+
+  describe("of the first file when a diff opens", function()
+    ---Open the diff again with `:Twintree`, now that a.txt is its first
+    ---changed file.
+    local function reopen()
+      h.reset()
+      vim.cmd("Twintree")
+      tab = api.nvim_get_current_tabpage()
+    end
+
+    local function assert_open_with_empty_panes()
+      local s = state()
+      assert.same({ "a.txt +1 -1 M", "b.txt +1 -1 M" }, h.tree_lines(s.tree_buf))
+      assert.equals("twintree://empty", name(s.wins.before))
+      assert.equals("twintree://empty", name(s.wins.after))
+      assert.is_false(vim.wo[s.wins.before].diff)
+      assert.is_false(vim.wo[s.wins.after].diff)
+      assert.is_nil(s.selected)
+      assert.is_nil(s.pair)
+      assert.equals(tree(), api.nvim_get_current_win())
+      assert.truthy(vim.uv.fs_stat(s.before.root .. "/a.txt"))
+      return s
+    end
+
+    it("leave an open session with empty panes on Abort", function()
+      swap_file("a.txt")
+      with_ui()
+      answer = 6
+      reopen()
+
+      assert.equals(1, #asked)
+      local s = assert_open_with_empty_panes()
+      local ns = api.nvim_get_namespaces().twintree
+      for _, mark in ipairs(api.nvim_buf_get_extmarks(s.tree_buf, ns, 0, -1, { details = true })) do
+        assert.is_nil(mark[4].line_hl_group)
+      end
+      assert.same({
+        {
+          msg = "twintree: a.txt was not opened: the swap file question was declined",
+          level = vim.log.levels.ERROR,
+        },
+      }, errors())
+    end)
+
+    it("ask again and show the file when it is selected afterwards", function()
+      swap_file("a.txt")
+      with_ui()
+      answer = 6
+      reopen()
+
+      answer = 2
+      select("a.txt")
+      assert.equals(2, #asked)
+      assert_pair("a.txt")
+      assert.equals(state().wins.after, api.nvim_get_current_win())
+      assert.equals(1, #errors())
+    end)
+
+    it("open the file on Edit anyway", function()
+      swap_file("a.txt")
+      with_ui()
+      answer = 2
+      reopen()
+
+      assert.equals(1, #asked)
+      assert_pair("a.txt")
+      assert.equals(state().wins.after, api.nvim_get_current_win())
+      assert.equals(0, #errors())
+    end)
+
+    it("give no question and no file without a user interface", function()
+      swap_file("a.txt")
+      reopen()
+
+      assert.equals(0, #asked)
+      assert_open_with_empty_panes()
+      assert.equals(1, #errors())
+      assert.truthy(errors()[1].msg:find("^twintree: a.txt was not opened: E325"))
     end)
   end)
 

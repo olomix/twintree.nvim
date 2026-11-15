@@ -167,6 +167,21 @@ function M.set_entries(tab, entries)
   M.draw(tab)
 end
 
+---The file on the first file line of the tree.
+---@param tab integer
+---@return twintree.Entry?
+function M.first_file(tab)
+  local state = session.get(tab)
+  if not state then
+    return nil
+  end
+  for _, line in ipairs(lines_of(state)) do
+    if line.type == "file" then
+      return line.entry
+    end
+  end
+end
+
 ---Open the file or toggle the directory under the cursor.
 function M.activate()
   local tab = vim.api.nvim_get_current_tabpage()

@@ -17,8 +17,6 @@
 - Clean up when a diff tab closes: remove the worktree buffers that are not
   shown anywhere else, so they do not stay in the buffer list and keep the
   language server of the old worktree running.
-- When a session opens, show the diff of the first changed file instead of
-  empty panes.
 - When a changed file is shown, put the cursor on its first change instead
   of the top of the file. When the user returns to a file they already
   viewed, the cursor should be where they left it.

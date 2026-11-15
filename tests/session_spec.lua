@@ -302,6 +302,58 @@ describe("session", function()
     end)
   end)
 
+  describe("opening", function()
+    local function marked_rows(state)
+      local ns = api.nvim_get_namespaces().twintree
+      local rows = {}
+      for _, mark in ipairs(api.nvim_buf_get_extmarks(state.tree_buf, ns, 0, -1, { details = true })) do
+        if mark[4].line_hl_group == "TwintreeSelected" then
+          table.insert(rows, mark[2] + 1)
+        end
+      end
+      return rows
+    end
+
+    it("shows the first file of the tree with the cursor in the after pane", function()
+      dirty()
+      local tab, err = twintree.open()
+      assert.is_nil(err)
+      local state = session.get(tab)
+
+      -- The renamed file in the directory is listed above a.txt.
+      assert.equals(state.before.root .. "/src/deep/b.txt", name(state.wins.before))
+      assert.equals(repo .. "/src/deep/c.txt", name(state.wins.after))
+      assert.is_true(vim.wo[state.wins.before].diff)
+      assert.is_true(vim.wo[state.wins.after].diff)
+      assert.equals("src/deep/c.txt", state.selected)
+      assert.same({ 2 }, marked_rows(state))
+      assert.equals(state.wins.after, api.nvim_get_current_win())
+      assert.same({ 2, 0 }, api.nvim_win_get_cursor(state.wins.tree))
+    end)
+
+    it("leaves empty panes and the cursor in the tree when nothing changed", function()
+      local tab, err = twintree.open()
+      assert.is_nil(err)
+      local state = session.get(tab)
+      assert.equals("twintree://empty", name(state.wins.before))
+      assert.equals("twintree://empty", name(state.wins.after))
+      assert.is_false(vim.wo[state.wins.after].diff)
+      assert.is_nil(state.selected)
+      assert.same({}, marked_rows(state))
+      assert.equals(state.wins.tree, api.nvim_get_current_win())
+    end)
+
+    it("shows a deleted first file next to the placeholder", function()
+      h.git(repo, "rm", "-q", "gone.txt")
+      local state = session.get(assert(twintree.open()))
+      assert.equals(state.before.root .. "/gone.txt", name(state.wins.before))
+      assert.equals("twintree://empty", name(state.wins.after))
+      assert.is_true(vim.wo[state.wins.before].diff)
+      assert.equals("gone.txt", state.selected)
+      assert.equals(state.wins.after, api.nvim_get_current_win())
+    end)
+  end)
+
   describe("selecting a file", function()
     local state
 
@@ -482,7 +534,7 @@ describe("session", function()
 
     two = select(two, "new.txt")
     one = session.get(api.nvim_win_get_tabpage(one.wins.tree))
-    assert.is_nil(one.selected)
+    assert.equals("src/deep/c.txt", one.selected)
 
     api.nvim_set_current_tabpage(api.nvim_win_get_tabpage(one.wins.tree))
     one = select(one, "a.txt")

@@ -518,6 +518,11 @@ describe("layout", function()
     end)
 
     it("leaves empty panes and the cursor in the tree when nothing is selected", function()
+      -- Only a diff without changes opens with nothing selected.
+      vim.cmd.tabclose({ bang = true, mods = { emsg_silent = true } })
+      h.reset()
+      h.git(repo, "checkout", "-q", "--", ".")
+      tab = assert(twintree.open())
       api.nvim_win_close(state().wins.after, true)
 
       assert.is_true(twintree.reset_layout())
@@ -738,6 +743,35 @@ describe("layout", function()
       select("a.txt")
       assert.equals("a.txt", state().selected)
     end)
+  end)
+
+  it("opens without the first file when a pane is closed meanwhile", function()
+    vim.cmd.tabclose({ bang = true, mods = { emsg_silent = true } })
+    h.reset()
+    -- Stands in for an autocommand of the user: no event fires between the
+    -- creation of the panes and the first file being shown.
+    local treeview = require("twintree.treeview")
+    local set_entries = treeview.set_entries
+    treeview.set_entries = function(session_tab, entries)
+      set_entries(session_tab, entries)
+      api.nvim_win_close(session.get(session_tab).wins.after, true)
+    end
+
+    local ok, opened, err = pcall(twintree.open)
+    treeview.set_entries = set_entries
+    assert.is_true(ok, tostring(opened))
+    tab = opened
+    assert.equals(session.BROKEN_LAYOUT, err)
+    local s = state()
+    assert.is_false(api.nvim_win_is_valid(s.wins.after))
+    assert.is_nil(s.selected)
+    assert.equals(tree(), api.nvim_get_current_win())
+    assert.equals("twintree://empty", api.nvim_buf_get_name(api.nvim_win_get_buf(s.wins.before)))
+
+    -- The layout can be rebuilt and the file selected.
+    assert.is_true(twintree.reset_layout())
+    select("a.txt")
+    assert.equals("a.txt", state().selected)
   end)
 
   it("keeps one set of autocommands after the plugin file is sourced again", function()

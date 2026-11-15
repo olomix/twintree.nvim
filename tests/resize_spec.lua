@@ -88,44 +88,65 @@ describe("in a real terminal", function()
     )
   end
 
-  before_each(function()
-    local long = {}
-    for i = 1, 200 do
-      long[i] = "line " .. i
-    end
-    local text = table.concat(long, "\n") .. "\n"
-    repo = h.repo({ ["a.txt"] = "one\n", ["long.txt"] = text })
-    h.write(repo, "a.txt", "two\n")
-    h.write(repo, "long.txt", ("added\n"):rep(10) .. text)
-    local socket = vim.fn.tempname()
+  local socket
 
-    local ok, id = pcall(vim.fn.jobstart, {
-      vim.v.progpath,
-      "-u",
-      root .. "/tests/minimal_init.lua",
-      "--listen",
-      socket,
-    }, {
+  ---Start the child Neovim with extra command line arguments.
+  local function launch(args)
+    socket = vim.fn.tempname()
+    local cmd = { vim.v.progpath, "-u", root .. "/tests/minimal_init.lua", "--listen", socket }
+    vim.list_extend(cmd, args or {})
+    local ok, id = pcall(vim.fn.jobstart, cmd, {
       pty = true,
       width = 160,
       height = 40,
       cwd = repo,
       env = { TERM = "xterm-256color" },
     })
-    if not ok or id <= 0 then
-      job = nil
-      return
+    job = ok and id > 0 and id or nil
+    if job then
+      assert(vim.wait(5000, function()
+        return vim.uv.fs_stat(socket) ~= nil
+      end, 50), "child Neovim did not start")
     end
-    job = id
-    assert(vim.wait(5000, function()
-      return vim.uv.fs_stat(socket) ~= nil
-    end, 50), "child Neovim did not start")
+    return job ~= nil
+  end
+
+  local function connect()
     chan = vim.fn.sockconnect("pipe", socket, { rpc = true })
     -- The socket accepts requests before the init file has been read.
     assert(vim.wait(5000, function()
       local ready, entered = pcall(lua, "return vim.v.vim_did_enter")
       return ready and entered == 1
     end, 50), "child Neovim did not finish starting")
+  end
+
+  local function stop()
+    if chan then
+      pcall(vim.fn.chanclose, chan)
+      chan = nil
+    end
+    if job then
+      vim.fn.jobstop(job)
+      job = nil
+    end
+  end
+
+  before_each(function()
+    local long = {}
+    for i = 1, 200 do
+      long[i] = "line " .. i
+    end
+    local text = table.concat(long, "\n") .. "\n"
+    -- 0.txt is the file shown when the diff opens; the others are not
+    -- loaded until a spec selects them.
+    repo = h.repo({ ["0.txt"] = "zero\n", ["a.txt"] = "one\n", ["long.txt"] = text })
+    h.write(repo, "0.txt", "ZERO\n")
+    h.write(repo, "a.txt", "two\n")
+    h.write(repo, "long.txt", ("added\n"):rep(10) .. text)
+    if not launch() then
+      return
+    end
+    connect()
 
     tab = lua(
       [[
@@ -139,16 +160,7 @@ describe("in a real terminal", function()
     end, "layout after opening")
   end)
 
-  after_each(function()
-    if chan then
-      pcall(vim.fn.chanclose, chan)
-      chan = nil
-    end
-    if job then
-      vim.fn.jobstop(job)
-      job = nil
-    end
-  end)
+  after_each(stop)
 
   ---Skip when this system cannot open a pseudo-terminal.
   local function pty_it(name, fn)
@@ -485,8 +497,8 @@ describe("in a real terminal", function()
         return last.messages:find("a.txt was not opened", 1, true) ~= nil
       end, 50)
       assert(ok, vim.inspect(last))
-      assert.truthy(vim.endswith(last.file, "twintree://empty"))
-      assert.is_false(last.diff)
+      assert.equals(repo .. "/0.txt", last.file)
+      assert.is_true(last.diff)
       assert.truthy(last.asked:find("E325: ATTENTION", 1, true))
       assert.is_nil(last.messages:find("stack traceback", 1, true))
     end)
@@ -512,6 +524,104 @@ describe("in a real terminal", function()
       assert.is_false(last.readonly)
       assert.truthy(last.asked:find("E325: ATTENTION", 1, true))
       assert.is_nil(last.messages:find("stack traceback", 1, true))
+    end)
+  end)
+
+  describe("started with +Twintree", function()
+    local owner
+
+    local function setup_arg(cache)
+      return ("lua require('twintree').setup({ cache_dir = '%s' })"):format(cache)
+    end
+
+    local function tree_state()
+      return lua([[
+        local session = require("twintree.session")
+        local state = session.get()
+        return {
+          tabs = #vim.api.nvim_list_tabpages(),
+          lines = vim.api.nvim_buf_get_lines(state.tree_buf, 0, -1, false),
+          in_tree = vim.api.nvim_get_current_win() == session.tree_win(state),
+          selected = state.selected or vim.NIL,
+          asked = vim.g.asked or "",
+          messages = vim.api.nvim_exec2("messages", { output = true }).output,
+        }
+      ]])
+    end
+
+    ---The pseudo-terminal answers no terminal queries, and the warning
+    ---about that leaves a "Press ENTER" prompt, which blocks requests.
+    local function dismiss_messages()
+      vim.wait(1500)
+      vim.fn.chansend(job, "\27")
+      vim.wait(300)
+    end
+
+    after_each(function()
+      if owner then
+        pcall(vim.fn.jobstop, owner)
+        owner = nil
+      end
+    end)
+
+    pty_it("shows the first file with the cursor in the after pane", function()
+      stop()
+      assert(launch({ "-c", setup_arg(h.tmpdir()), "-c", "Twintree" }))
+      dismiss_messages()
+      connect()
+      tab = lua("return vim.api.nvim_get_current_tabpage()")
+
+      local panes = settle_panes(function(p)
+        return p.after.file == repo .. "/0.txt" and p.after.current
+      end)
+      assert.equals(panes.root .. "/0.txt", panes.before.file)
+      assert.is_true(panes.before.diff)
+      assert.is_true(panes.after.diff)
+      local tree = tree_state()
+      assert.equals(1, tree.tabs)
+      assert.equals("0.txt", tree.selected)
+      settle(function(w)
+        return w.tree == 35 and equal_panes(w)
+      end, "layout after starting with +Twintree")
+    end)
+
+    pty_it("asks about a swap file of the first file and opens without it on Abort", function()
+      stop()
+      local swap_dir = h.tmpdir()
+      owner = h.swap_owner(repo .. "/0.txt", swap_dir, true)
+      assert(launch({
+        "-c",
+        "set swapfile directory=" .. swap_dir .. "//",
+        "-c",
+        "lua local s = require('twintree.swap'); local ask = s.ask; "
+          .. "s.ask = function(t, l) vim.g.asked = t; return ask(t, l) end",
+        "-c",
+        setup_arg(h.tmpdir()),
+        "-c",
+        "Twintree",
+      }))
+      -- The prompt blocks requests, so the answer goes to the terminal.
+      vim.wait(1500)
+      vim.fn.chansend(job, "a")
+      dismiss_messages()
+      connect()
+      tab = lua("return vim.api.nvim_get_current_tabpage()")
+
+      local last
+      local ok = vim.wait(5000, function()
+        last = tree_state()
+        return last.messages:find("0.txt was not opened", 1, true) ~= nil
+      end, 50)
+      assert(ok, vim.inspect(last))
+      assert.truthy(last.asked:find("E325: ATTENTION", 1, true))
+      assert.is_nil(last.messages:find("stack traceback", 1, true))
+      assert.equals(vim.NIL, last.selected)
+      assert.is_true(last.in_tree)
+      assert.equals(3, #last.lines)
+      local panes = lua(PANES, tab)
+      assert.truthy(vim.endswith(panes.before.file, "twintree://empty"))
+      assert.truthy(vim.endswith(panes.after.file, "twintree://empty"))
+      assert.is_false(panes.after.diff)
     end)
   end)
 end)

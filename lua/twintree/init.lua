@@ -69,6 +69,18 @@ function M.open(revs)
 
   local tab = session.create(repo, before, after, treeview.create_buf())
   treeview.set_entries(tab, entries)
+
+  local first = treeview.first_file(tab)
+  if first then
+    local ok, show_err = session.show(tab, first)
+    if not ok then
+      -- The session stays open: the tree is still of use without the file.
+      return tab, show_err
+    end
+    -- Entering a pane in a narrow terminal resizes the windows, which the
+    -- next synchronization would read as a zoom made by the user.
+    require("twintree.layout").reapply(tab)
+  end
   return tab
 end
 

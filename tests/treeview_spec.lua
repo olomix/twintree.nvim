@@ -193,8 +193,11 @@ describe("tree view", function()
     local ns = api.nvim_get_namespaces().twintree
     local found = {}
     for _, mark in ipairs(api.nvim_buf_get_extmarks(buf, ns, { 1, 0 }, { 1, -1 }, { details = true })) do
-      local text = api.nvim_buf_get_text(buf, 1, mark[3], 1, mark[4].end_col, {})[1]
-      found[mark[4].hl_group] = text
+      -- The mark of the selected line has no group of its own.
+      if mark[4].hl_group then
+        local text = api.nvim_buf_get_text(buf, 1, mark[3], 1, mark[4].end_col, {})[1]
+        found[mark[4].hl_group] = text
+      end
     end
     assert.same({
       TwintreeGuide = "│ ",
@@ -293,6 +296,26 @@ describe("tree view", function()
       vim.cmd.tabnew()
       treeview.redraw_if_resized()
       assert.is_nil(session.get())
+    end)
+  end)
+
+  describe("first_file", function()
+    it("is the file on the first file line, not the first one git reports", function()
+      assert.equals("a.lua", vim.b[state().tree_buf].twintree_entries[1].path)
+      assert.equals("src/deep/b.lua", treeview.first_file(tab).path)
+    end)
+
+    it("is nil when nothing changed", function()
+      vim.cmd.tabclose({ bang = true, mods = { emsg_silent = true } })
+      h.reset()
+      h.git(repo, "checkout", "-q", "--", ".")
+      tab = assert(twintree.open())
+      assert.is_nil(treeview.first_file(tab))
+    end)
+
+    it("is nil in a tab without a session", function()
+      vim.cmd.tabnew()
+      assert.is_nil(treeview.first_file(api.nvim_get_current_tabpage()))
     end)
   end)
 

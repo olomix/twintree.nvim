@@ -42,6 +42,10 @@ Calling `setup()` is optional.
 The merge-base is always used, as in `git diff rev1...rev2`. `:Twintree main`
 shows what your branch changed since it left `main`.
 
+The diff opens with the first file of the tree shown in both panes and the
+cursor in the after pane. When nothing changed, the panes are empty and the
+cursor is in the tree.
+
 From the shell, the diff uses the first tab:
 
 ```sh
@@ -119,6 +123,8 @@ A file of your checkout that a pane is about to show may have a swap file.
   Delete it, Quit, Abort.
 - **You answer Quit or Abort.** The file is not opened and one line says so.
   After a selection in the tree the panes show what they showed before.
+  When it was the file a diff opens with, the diff still opens, with empty
+  panes and the cursor in the tree.
   After a jump in a pane, that pane keeps the file you went to, without
   diff mode, and the other pane keeps its file.
 
