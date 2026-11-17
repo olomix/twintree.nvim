@@ -614,8 +614,8 @@ function M.show(tab, entry)
     return false, err
   end
   state = assert(M.get(tab))
-  -- One jump only: a second one in the other pane would drag this one
-  -- past a block of lines that exists on one side.
+  -- In one pane only: a jump in the other pane as well would drag this
+  -- one past a block of lines that exists on one side.
   local pane = pair.after and "after" or "before"
   if pair[pane] and not viewed[tostring(state.bufs[pane])] then
     goto_first_change(state.wins[pane])

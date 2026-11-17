@@ -46,9 +46,10 @@ The diff opens with the first file of the tree shown in both panes and the
 cursor in the after pane. When nothing changed, the panes are empty and the
 cursor is in the tree.
 
-A file selected in the tree for the first time is shown with the cursor on
-its first change. When you come back to a file, the cursor is where you
-left it. A file you reach by a jump keeps the cursor of the jump.
+A file shown for the first time, when the diff opens or when you select
+it in the tree, has the cursor on its first change. When you come back to
+a file, the cursor is where you left it. A file you reach by a jump keeps
+the cursor of the jump.
 
 From the shell, the diff uses the first tab:
 

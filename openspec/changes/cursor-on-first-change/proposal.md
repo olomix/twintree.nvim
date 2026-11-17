@@ -41,8 +41,10 @@ None.
 ## Impact
 
 - `lua/twintree/session.lua`: the session record remembers which buffers
-  it has shown; `show` places the cursor after a pair is shown.
+  it has shown; `show` places the cursor after a pair is shown; a pair
+  with a placeholder is put into diff mode without `'scrollbind'`.
 - `tests/session_spec.lua`, `tests/follow_spec.lua`,
-  `tests/layout_ui_spec.lua`: new specs. Existing specs that assume the
-  cursor is on line 1 after a selection may need their setup adjusted.
+  `tests/layout_ui_spec.lua`, `tests/swap_ui_spec.lua`,
+  `tests/resize_spec.lua`: new specs. One existing spec that expected
+  `'scrollbind'` for a deleted file checks it for a file with both sides.
 - `README.md`, `doc/twintree.txt`, `TODO.md`.
