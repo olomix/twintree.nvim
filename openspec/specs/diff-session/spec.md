@@ -87,6 +87,18 @@ unnamed, unmodified buffer.
 - **WHEN** Neovim is started with `nvim +Twintree`
 - **THEN** the session uses the first tab and no second tab exists
 
+#### Scenario: Started from the command line without changes
+- **WHEN** Neovim is started with `nvim +Twintree` for a diff without
+  changed files, on any supported Neovim version and with Neovim's
+  bundled plugins loaded
+- **THEN** the tab has exactly three windows, the cursor is in the tree
+  window, and no window shows the tree a second time
+
+#### Scenario: Previous window of the tree
+- **WHEN** a session opens with the cursor in the tree window and the
+  user presses `<C-w>p`
+- **THEN** the cursor is in the after pane
+
 ### Requirement: First changed file is shown when a session opens
 When a session opens and the diff has changed files, the plugin SHALL show
 the file on the first file line of the tree as if the user had selected it,

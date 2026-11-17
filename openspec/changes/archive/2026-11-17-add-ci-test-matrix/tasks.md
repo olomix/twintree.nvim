@@ -24,4 +24,4 @@
 ## 4. Checks
 
 - [x] 4.1 Run `make test` locally with the stable or the nightly Neovim, `actionlint`, and `openspec validate add-ci-test-matrix --strict`; verify all three pass and that the last run of the workflow on the branch is green
-- [ ] 4.2 After the pull request is merged: verify that the run for the push to `main` is green, that `gh workflow run test.yml` starts a run, and that the badge in the README shows the state of `main`. This task stays open until the merge
+- [x] 4.2 After the pull request is merged: verify that the run for the push to `main` is green, that `gh workflow run test.yml` starts a run, and that the badge in the README shows the state of `main`. This task stays open until the merge
