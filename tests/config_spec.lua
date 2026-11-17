@@ -74,6 +74,7 @@ describe("config", function()
       ["a key that is true"] = { prev_file = true },
       ["an action the plugin does not have"] = { nxt_file = "<F7>" },
       ["a list of keys"] = { "<F7>", "<F8>" },
+      ["a key longer than Neovim maps"] = { prev_file = ("x"):rep(51) },
     }
     for label, keys in pairs(unusable) do
       it("reject " .. label .. " and take nothing from that call", function()

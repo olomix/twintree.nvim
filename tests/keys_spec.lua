@@ -11,7 +11,7 @@ local OURS_PREV = "Twintree: previous changed file"
 describe("keys", function()
   local cache, repo, messages, notify
   -- Every key a spec may map, so that none of them outlives its spec.
-  local USED = { NEXT, PREV, "<F7>", "<F8>" }
+  local USED = { NEXT, PREV, "<F7>", "<F8>", "<Tab>", "<C-I>" }
 
   ---The global normal-mode mapping on a key.
   local function global(lhs)
@@ -499,6 +499,39 @@ describe("keys", function()
       assert.equals("b.txt", shown(tab))
       press("<F8>")
       assert.equals("a.txt", shown(tab))
+    end)
+
+    it("are not taken for another key that only reads the same", function()
+      -- Neovim keeps <Tab> and <C-I> as two mappings.
+      vim.keymap.set("n", "<Tab>", function()
+        vim.g.hits = (vim.g.hits or 0) + 1
+      end, { desc = "user tab" })
+      local function tab_mapping()
+        for _, mapping in ipairs(api.nvim_get_keymap("n")) do
+          if mapping.lhs == "<Tab>" then
+            return mapping
+          end
+        end
+      end
+      local before = essence(tab_mapping())
+      assert.truthy(before)
+
+      twintree.setup({ cache_dir = cache, keys = { next_file = "<C-I>", prev_file = false } })
+      vim.cmd.edit(repo .. "/a.txt")
+      open()
+      assert.is_nil(vim.g.twintree_keys.next_file.saved)
+      assert.same(before, essence(tab_mapping()))
+
+      vim.cmd.tabprevious()
+      vim.cmd.tabnext()
+      vim.cmd.tabprevious()
+      -- Not given up over the other key, and not left behind.
+      assert.same({}, vim.g.twintree_keys)
+      assert.same(before, essence(tab_mapping()))
+      local ours = vim.tbl_filter(function(mapping)
+        return mapping.desc == OURS_NEXT
+      end, api.nvim_get_keymap("n"))
+      assert.same({}, ours)
     end)
 
     it("leave an action without a key for false", function()

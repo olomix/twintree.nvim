@@ -224,9 +224,14 @@ The first and last file have no key by default. Map the commands yourself,
 for example:
 
 ```lua
-vim.keymap.set("n", "]<C-S-f>", "<Cmd>TwintreeLastFile<CR>")
-vim.keymap.set("n", "[<C-S-f>", "<Cmd>TwintreeFirstFile<CR>")
+vim.keymap.set("n", "]<C-g>", "<Cmd>TwintreeLastFile<CR>")
+vim.keymap.set("n", "[<C-g>", "<Cmd>TwintreeFirstFile<CR>")
 ```
+
+`]<C-S-f>` and `[<C-S-f>` look like the natural choice, but they only work
+in a terminal that tells Ctrl+Shift+F from Ctrl+F (kitty keyboard protocol,
+or tmux with `extended-keys`). Elsewhere Neovim receives `]<C-f>`, and the
+key shows the next file instead of the last.
 
 What to know about the keys of the plugin:
 

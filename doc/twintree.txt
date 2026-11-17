@@ -125,8 +125,12 @@ Both commands report an error when the current tab has no diff.
     Show the first or the last changed file of the tree that is not inside
     a folded directory. No key is mapped to them by default: >lua
 
-        vim.keymap.set("n", "]<C-S-f>", "<Cmd>TwintreeLastFile<CR>")
+        vim.keymap.set("n", "]<C-g>", "<Cmd>TwintreeLastFile<CR>")
 <
+    `]<C-S-f>` works only in a terminal that tells Ctrl+Shift+F from
+    Ctrl+F, see |tui-csiu|. Elsewhere Neovim receives `]<C-f>`, and the key
+    shows the next file instead of the last.
+
                                                                *:TwintreeClean*
 :TwintreeClean
     Remove the cached worktrees of the current repository. Worktrees used by

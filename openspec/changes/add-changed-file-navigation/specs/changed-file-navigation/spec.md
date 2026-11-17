@@ -272,6 +272,13 @@ options and description. Mappings in other modes SHALL NOT be touched.
 - **THEN** the keys work in it at once, also when its first file was not
   opened
 
+#### Scenario: Key that reads like another key
+- **WHEN** the user configured `<C-I>` for next and has a mapping of their
+  own on `<Tab>`, which Neovim keeps apart from `<C-I>`, and a diff tab is
+  entered and left
+- **THEN** the mapping on `<Tab>` is untouched and the plugin's mapping is
+  gone
+
 #### Scenario: Two diff tabs
 - **WHEN** two diff tabs are open and the user presses `]<C-f>` in each
 - **THEN** each tab moves to its own next file
@@ -381,8 +388,9 @@ stay as they were.
 
 #### Scenario: Not a usable value
 - **WHEN** the user sets the option to a value that is not a table, a key
-  to an empty string or to a value that is neither a string nor `false`,
-  or names an action the plugin does not have
+  to an empty string, to a key Neovim cannot map, or to a value that is
+  neither a string nor `false`, or names an action the plugin does not
+  have
 - **THEN** one line says so, no Lua error is raised then or on a later
   change of tab, and the keys in use are the ones from before that call
 

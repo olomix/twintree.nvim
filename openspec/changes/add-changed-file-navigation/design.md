@@ -35,8 +35,11 @@ with the same results on all three:
 - `maparg(lhs, "n", false, true)` returns a buffer-local mapping of the
   current buffer when there is one, not the global mapping.
   `nvim_get_keymap("n")` lists global mappings only.
-- The `lhsraw` of such an entry is not what `vim.keycode()` returns for
-  the same key; `vim.keycode(entry.lhs)` is.
+- `vim.keycode()` does not give the form Neovim stores a key in (the
+  `lhsraw` of an entry): it also makes `<C-I>` and `<Tab>` one key, which
+  Neovim maps separately. Mapping the key on a scratch buffer and reading
+  the entry back gives the stored form, and fails for a key Neovim cannot
+  map, such as one longer than 50 bytes.
 - An entry of `nvim_get_keymap` restored with `mapset()` brings back a
   Lua callback, an expression mapping, the options and the description.
 - Setting a normal-mode mapping on a key that has a `:map` mapping for
@@ -205,7 +208,7 @@ saved global mapping or nothing, and whether the key was given up
 the placeholder buffer number does.
 
 Binding reads the global normal-mode mapping from `nvim_get_keymap`,
-matched through `vim.keycode(entry.lhs)`, stores it, and sets the
+matched by the stored form of the key (`lhsraw`), stores it, and sets the
 plugin's. A mapping found there that is itself the plugin's, left behind
 by a failure, is never stored; the key then counts as unmapped. Releasing
 deletes the plugin's mapping and restores the stored entry with
@@ -285,7 +288,11 @@ option before it takes anything from the call:
 
 - it is a table whose only names are `next_file` and `prev_file`;
 - each value is a string that is not empty, or `false`;
-- no key is used for two actions, compared through `vim.keycode()`, so
+- Neovim can map each key. Found by review: asking Neovim, by mapping the
+  key on a scratch buffer, is the only complete rule; a key it refuses
+  would otherwise raise when the keys are bound, after the options were
+  taken.
+- no key is used for two actions, compared in the form Neovim stores, so
   that `]<C-f>` and `]<c-f>` are one key. The check is made on the
   values as they would be in use, the ones of the call merged over the
   defaults: `keys = { next_file = "[<C-f>" }` collides with the default

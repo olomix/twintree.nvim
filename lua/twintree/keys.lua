@@ -37,9 +37,11 @@ end
 ---@param lhs string
 ---@return table?
 local function global_mapping(lhs)
-  local code = vim.keycode(lhs)
+  -- The stored form, not `vim.keycode()`: a mapping on `<Tab>` is not one
+  -- on `<C-I>`.
+  local raw = config.raw_key(lhs)
   for _, mapping in ipairs(vim.api.nvim_get_keymap("n")) do
-    if vim.keycode(mapping.lhs) == code then
+    if mapping.lhsraw == raw then
       return mapping
     end
   end
@@ -118,14 +120,17 @@ function M.sync()
   for _, action in ipairs(ACTIONS) do
     local record = records[action]
     local lhs = wanted[action]
-    if record and record.lhs and not (lhs and vim.keycode(lhs) == vim.keycode(record.lhs)) then
-      release(records, action)
+    if record and record.lhs then
+      if not (lhs and config.raw_key(lhs) == config.raw_key(record.lhs)) then
+        release(records, action)
+      end
     end
   end
   for _, action in ipairs(ACTIONS) do
     local lhs = wanted[action]
     if lhs and not records[action] then
-      bind(records, action, lhs)
+      -- A key Neovim refuses must not keep the record from being stored.
+      pcall(bind, records, action, lhs)
     end
   end
   store(records)

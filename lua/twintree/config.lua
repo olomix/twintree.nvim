@@ -22,6 +22,31 @@ local defaults = {
 
 M.options = vim.deepcopy(defaults)
 
+local raw_keys = {}
+
+---The form in which Neovim stores a key as the left-hand side of a
+---mapping. `vim.keycode()` is not that form: it makes `<C-I>` and `<Tab>`
+---one key, which Neovim maps separately.
+---@param key string
+---@return string? raw nil when Neovim cannot map the key
+---@return string? err
+function M.raw_key(key)
+  if raw_keys[key] then
+    return raw_keys[key]
+  end
+  -- Asking Neovim is the only complete rule: map the key where it
+  -- disturbs nothing and read it back.
+  local buf = vim.api.nvim_create_buf(false, true)
+  local ok, err = pcall(vim.api.nvim_buf_set_keymap, buf, "n", key, "", {})
+  local mapping = ok and vim.api.nvim_buf_get_keymap(buf, "n")[1]
+  vim.api.nvim_buf_delete(buf, { force = true })
+  if not mapping then
+    return nil, tostring(err):match("[^\n]+")
+  end
+  raw_keys[key] = mapping.lhsraw
+  return mapping.lhsraw
+end
+
 ---Why the `keys` of a call to `setup()` cannot be used, if they cannot.
 ---@param keys any
 ---@return string?
@@ -39,6 +64,12 @@ local function keys_problem(keys)
     if key ~= false and (type(key) ~= "string" or key == "") then
       return ("keys.%s has to be a key or false"):format(action)
     end
+    if key then
+      local _, err = M.raw_key(key)
+      if err then
+        return ("keys.%s cannot be mapped: %s"):format(action, err)
+      end
+    end
   end
   -- As they would be in use: a key of the call can collide with a default.
   local merged = vim.tbl_extend("force", defaults.keys, keys)
@@ -49,11 +80,11 @@ local function keys_problem(keys)
     local key = merged[action]
     if key then
       -- `]<C-f>` and `]<c-f>` are one key.
-      local code = vim.keycode(key)
-      if taken[code] then
-        return ("keys.%s and keys.%s are the same key"):format(taken[code], action)
+      local raw = M.raw_key(key)
+      if taken[raw] then
+        return ("keys.%s and keys.%s are the same key"):format(taken[raw], action)
       end
-      taken[code] = action
+      taken[raw] = action
     end
   end
   return nil
