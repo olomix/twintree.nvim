@@ -183,6 +183,44 @@ describe("session", function()
       assert.is_false(worktree.is_ready(repo, second))
     end)
 
+    it("treats a tab closed while the first file is shown as a failed open", function()
+      h.write(repo, "a.txt", "one\nTWO\nthree\n")
+      vim.cmd.edit(repo .. "/a.txt")
+      local origin = api.nvim_get_current_win()
+      local function close_on_load()
+        -- The after side is loaded already; this is the before side.
+        return api.nvim_create_autocmd("BufReadPost", {
+          pattern = "*/a.txt",
+          once = true,
+          callback = function()
+            vim.cmd("tabclose!")
+          end,
+        })
+      end
+
+      local id = close_on_load()
+      local ok, tab, err = pcall(twintree.open)
+      pcall(api.nvim_del_autocmd, id)
+      assert.is_true(ok, tostring(tab))
+      assert.is_nil(tab)
+      assert.equals(session.TAB_GONE, err)
+      assert.equals(1, #api.nvim_list_tabpages())
+      assert.equals(origin, api.nvim_get_current_win())
+      assert.is_nil(session.get())
+      assert.same({}, worktree.list(repo))
+
+      -- A worktree that was already cached is not this call's to remove.
+      local cached = assert(worktree.ensure(repo, first))
+      vim.cmd("silent! bwipeout! " .. vim.fn.fnameescape(cached .. "/a.txt"))
+      id = close_on_load()
+      ok, tab, err = pcall(twintree.open)
+      pcall(api.nvim_del_autocmd, id)
+      assert.is_true(ok, tostring(tab))
+      assert.is_nil(tab)
+      assert.equals(session.TAB_GONE, err)
+      assert.same({ cached }, worktree.list(repo))
+    end)
+
     it("reports git's error when a worktree cannot be created", function()
       h.write(repo, ".git/hooks/post-checkout", "#!/bin/sh\necho hook-says-no >&2\nexit 1\n")
       vim.uv.fs_chmod(repo .. "/.git/hooks/post-checkout", 493)

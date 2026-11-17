@@ -650,6 +650,54 @@ describe("layout", function()
       assert.is_false(api.nvim_tabpage_is_valid(tab))
     end)
 
+    it("reports a diff tab closed while the reset shows the file again", function()
+      vim.cmd.tabnew()
+      api.nvim_set_current_tabpage(tab)
+      local shown = api.nvim_buf_get_name(state().bufs.before)
+      local id = api.nvim_create_autocmd("BufWinEnter", {
+        pattern = shown,
+        once = true,
+        callback = function()
+          vim.cmd("tabclose!")
+        end,
+      })
+      local messages, restore = capture_notify()
+
+      local ok, result, err = pcall(twintree.reset_layout)
+      pcall(api.nvim_del_autocmd, id)
+      restore()
+      assert.is_true(ok, tostring(result))
+      assert.is_nil(result)
+      assert.equals("the diff tab was closed while its layout was reset", err)
+      assert.is_false(api.nvim_tabpage_is_valid(tab))
+      assert.same({}, messages)
+    end)
+
+    it("reports a pane closed while the reset shows the file again", function()
+      local shown = api.nvim_buf_get_name(state().bufs.before)
+      local id = api.nvim_create_autocmd("BufWinEnter", {
+        pattern = shown,
+        once = true,
+        callback = function()
+          api.nvim_win_close(state().wins.after, true)
+        end,
+      })
+      local messages, restore = capture_notify()
+
+      local ok, result = pcall(twintree.reset_layout)
+      pcall(api.nvim_del_autocmd, id)
+      restore()
+      assert.is_true(ok, tostring(result))
+      assert.same({
+        { msg = "twintree: " .. session.BROKEN_LAYOUT, level = vim.log.levels.ERROR },
+      }, messages)
+      local s = state()
+      assert.is_nil(s.selected)
+      assert.is_nil(s.pair)
+      assert.equals(tree(), api.nvim_get_current_win())
+      assert.is_false(vim.wo[s.wins.before].diff)
+    end)
+
     it("works in a tab that has no room for another window", function()
       select("a.txt")
       api.nvim_set_current_win(state().wins.after)

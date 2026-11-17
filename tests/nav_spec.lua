@@ -264,6 +264,31 @@ describe("moving between changed files", function()
       end)
     end)
 
+    it("keeps its position when a pane goes away while the file loads", function()
+      local s = state()
+      local id = api.nvim_create_autocmd("BufReadPost", {
+        pattern = s.before.root .. "/d1/y.txt",
+        once = true,
+        callback = function()
+          api.nvim_win_close(s.wins.after, true)
+        end,
+      })
+      local ok, shown_file = pcall(run, "next")
+      pcall(api.nvim_del_autocmd, id)
+      assert.is_true(ok, tostring(shown_file))
+      assert.is_false(shown_file)
+      assert.same({ { msg = "twintree: " .. session.BROKEN_LAYOUT, level = ERROR } }, messages)
+      assert.equals("d1/x.txt", state().selected)
+      assert.equals("d1/x.txt", state().last_entry)
+
+      -- With the layout back, next is the same file again.
+      messages = {}
+      assert(twintree.reset_layout())
+      assert.is_true(run("next"))
+      assert.equals("d1/y.txt", shown())
+      assert.same({}, messages)
+    end)
+
     describe("collapsed directories", function()
       it("are skipped and stay collapsed", function()
         select("d1/y.txt")

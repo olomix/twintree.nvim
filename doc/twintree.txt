@@ -300,6 +300,14 @@ The plugin keeps the following:
 
 |:TwintreeResetLayout| returns the tab to its original view.
 
+When a pane is closed, showing a file reports that a pane is missing and
+names |:TwintreeResetLayout|. That also holds when an autocommand, of yours
+or of another plugin, closes a pane while the plugin is showing a file: the
+file that was selected before stays selected, and the pane that is left
+shows what it showed, without diff mode. When the diff tab itself is closed
+at that moment, one line says so. A pane that is alone in its diff tab is a
+plain window: it is in diff mode only while both panes are there.
+
 Highlight groups, linked by default:
 
     TwintreeAdded        Added

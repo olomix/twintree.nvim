@@ -49,6 +49,7 @@ local PANES = { "before", "after" }
 
 M.NO_SESSION = "no diff session in this tab"
 M.BROKEN_LAYOUT = "a pane of this diff is missing; run :TwintreeResetLayout"
+M.TAB_GONE = "the diff tab was closed while a file was shown"
 
 ---@return twintree.Layout
 function M.default_layout()
@@ -465,30 +466,44 @@ local function pair_buf(path)
   return buf
 end
 
----Take back an attempt to show a pair after one of its files was not
----opened: the panes changed for it show what they showed before, and the
----session records the previous pair again.
+---What an attempt to show a pair needs to be taken back.
+---@class twintree.Attempt
+---@field previous? { pair?: twintree.Pair, selected?: string, bufs?: table }
+---  what the session recorded before; nil while there is nothing to take
+---  back
+---@field changed table<string, { win: integer, buf: integer }> per pane,
+---  the window that was changed and the buffer it showed
+
+---Take back an attempt to show a pair: the session records the previous
+---pair again and the panes changed for it show what they showed before.
 ---@param tab integer
----@param state twintree.Session
----@param previous { pair?: twintree.Pair, selected?: string, bufs?: table }
----@param changed table<string, integer> buffer each changed pane showed
-local function undo_pair(tab, state, previous, changed)
+---@param attempt twintree.Attempt
+local function take_back(tab, attempt)
+  -- Read again: the tab may be gone, and then nothing is left to restore.
+  local state = M.get(tab)
+  if not state then
+    return
+  end
+  local previous = attempt.previous
   state.pair, state.selected, state.bufs = previous.pair, previous.selected, previous.bufs
   -- Saved first: the events fired below must find the previous pair.
   M.save(tab, state)
-  for pane, shown in pairs(changed) do
-    local win = state.wins[pane]
-    if vim.api.nvim_win_is_valid(win) then
+  for pane, change in pairs(attempt.changed) do
+    -- Only the window the attempt changed: a layout reset run by an
+    -- autocommand in between leaves new panes it never touched.
+    if state.wins[pane] == change.win and vim.api.nvim_win_is_valid(change.win) then
       -- A loaded buffer: no swap file is consulted, so the API call is safe.
-      local back = vim.api.nvim_buf_is_valid(shown) and shown or M.placeholder()
-      pcall(vim.api.nvim_win_set_buf, win, back)
+      local back = vim.api.nvim_buf_is_valid(change.buf) and change.buf or M.placeholder()
+      pcall(vim.api.nvim_win_set_buf, change.win, back)
     end
   end
+  -- A pane without a partner is a plain window.
+  local paired = M.has_panes(state)
   for _, pane in ipairs(PANES) do
     local win = state.wins[pane]
     if vim.api.nvim_win_is_valid(win) then
       local recorded = state.bufs and state.bufs[pane]
-      local enable = recorded ~= nil and vim.api.nvim_win_get_buf(win) == recorded
+      local enable = paired and recorded ~= nil and vim.api.nvim_win_get_buf(win) == recorded
       set_diff(win, enable, state.pair)
     end
   end
@@ -496,7 +511,8 @@ local function undo_pair(tab, state, previous, changed)
 end
 
 ---What `M.show_pair` does, without its guard.
-local function show_pair(tab, pair, opts)
+---@param attempt twintree.Attempt filled in for the guard
+local function show_pair(tab, pair, opts, attempt)
   local state = M.get(tab)
   if not state then
     return false, M.NO_SESSION
@@ -505,7 +521,7 @@ local function show_pair(tab, pair, opts)
     return false, M.BROKEN_LAYOUT
   end
 
-  local previous = { pair = state.pair, selected = state.selected, bufs = state.bufs }
+  attempt.previous = { pair = state.pair, selected = state.selected, bufs = state.bufs }
   local replaced = state.bufs or {}
   state.pair = pair
   state.selected = M.entry_path(state, pair)
@@ -518,25 +534,45 @@ local function show_pair(tab, pair, opts)
   -- The pane that keeps its alternate file comes last: the buffer leaving
   -- it is then already shown in the other pane and is never hidden.
   local order = keepalt == "before" and { "after", "before" } or PANES
-  local changed = {}
   for _, pane in ipairs(order) do
     local win, buf = state.wins[pane], state.bufs[pane]
     set_diff(win, false)
     local shown = vim.api.nvim_win_get_buf(win)
     if shown ~= buf then
+      -- Before the attempt: a failed one can still leave the buffer in
+      -- the window.
+      attempt.changed[pane] = { win = win, buf = shown }
       local ok, reason = swap.open(win, buf, keepalt == pane)
       if not ok then
+        -- A window closed while it loaded its file also ends here, and
+        -- then the file is not what went wrong.
+        local problem = M.layout_problem(tab)
+        if problem then
+          return false, problem
+        end
         local name = vim.fs.basename(vim.api.nvim_buf_get_name(buf))
-        -- A failed attempt can still leave the buffer in the window.
-        changed[pane] = shown
-        undo_pair(tab, state, previous, changed)
         return false, ("%s was not opened: %s"):format(name, reason)
       end
-      changed[pane] = shown
     end
   end
+  for _, pane in ipairs(PANES) do
+    leave_diff(tab, replaced[pane] or state.bufs[pane])
+  end
+  for _, pane in ipairs(PANES) do
+    set_diff(state.wins[pane], true, pair)
+  end
+  -- The last event above can close a pane without anything raising.
+  local problem = M.layout_problem(tab)
+  if problem then
+    return false, problem
+  end
+
+  -- Only now does the file count as shown: an attempt that is taken back
+  -- leaves no position and no cursor rule behind. Read again, because
+  -- the events above may have changed the record.
+  local previous = attempt.previous
+  state = assert(M.get(tab))
   state.declined = nil
-  -- Not before the files are open: a declined file is not a position.
   -- The previous selection stands in for a session that has no last entry.
   state.last_entry = state.selected or state.last_entry or previous.selected
   for _, pane in ipairs(PANES) do
@@ -545,12 +581,7 @@ local function show_pair(tab, pair, opts)
     end
   end
   M.save(tab, state)
-  for _, pane in ipairs(PANES) do
-    leave_diff(tab, replaced[pane] or state.bufs[pane])
-  end
-  for _, pane in ipairs(PANES) do
-    set_diff(state.wins[pane], true, pair)
-  end
+  attempt.previous = nil
 
   -- Required here, not at the top: the tree view requires this module.
   local treeview = require("twintree.treeview")
@@ -567,9 +598,24 @@ end
 -- Whether a pair is being put into the panes right now.
 local showing = false
 
+---Why a tab cannot show a pair, when its layout is the reason.
+---@param tab integer
+---@return string? problem nil for a tab with a session and both panes
+function M.layout_problem(tab)
+  local state = M.get(tab)
+  if not state then
+    return M.TAB_GONE
+  end
+  if not M.has_panes(state) then
+    return M.BROKEN_LAYOUT
+  end
+  return nil
+end
+
 ---Show a pair of files in the panes, diffed against each other, and mark
----its entry in the tree. When one of the files is not opened, the panes and
----the session are as before the call.
+---its entry in the tree. When that does not work out, because a file is
+---not opened or because a pane or the tab goes away on the way, the
+---session and the panes that are left are as before the call.
 ---@param tab integer
 ---@param pair twintree.Pair
 ---@param opts? { keepalt?: "before"|"after" } pane whose alternate file
@@ -580,11 +626,22 @@ function M.show_pair(tab, pair, opts)
   -- A declined swap file makes Neovim put a pane back to its old buffer;
   -- following that would move the other pane in the middle of the attempt.
   showing = true
-  local ran, ok, err = pcall(show_pair, tab, pair, opts)
-  showing = false
+  local attempt = { changed = {} }
+  local ran, ok, err = pcall(show_pair, tab, pair, opts, attempt)
   if not ran then
-    error(ok, 0)
+    -- Loading a file runs autocommands, which can close a pane or the
+    -- tab; every later use of what is gone raises. Anything else is a bug.
+    local problem = M.layout_problem(tab)
+    if not problem then
+      showing = false
+      error(ok, 0)
+    end
+    ok, err = false, problem
   end
+  if not ok and attempt.previous then
+    pcall(take_back, tab, attempt)
+  end
+  showing = false
   return ok, err
 end
 
@@ -628,7 +685,10 @@ function M.show(tab, entry, opts)
   if not ok then
     return false, err
   end
-  state = assert(M.get(tab))
+  state = M.get(tab)
+  if not state then
+    return false, M.TAB_GONE
+  end
   -- In one pane only: a jump in the other pane as well would drag this
   -- one past a block of lines that exists on one side.
   local pane = pair.after and "after" or "before"
@@ -712,6 +772,10 @@ local function move_to_own_pane(tab, win, buf)
     M.decline(tab, landing, buf, err)
     return
   end
+  -- The file is shown; its pane can still be closed while the tree is drawn.
+  if not vim.api.nvim_win_is_valid(own) then
+    return
+  end
   vim.api.nvim_win_call(own, function()
     vim.fn.winrestview(view)
   end)
@@ -761,7 +825,8 @@ function M.follow()
     M.save(tab, state)
   end
   if state.bufs and state.bufs[pane] == buf then
-    set_diff(win, true, state.pair)
+    -- Not without the other pane: alone, a pane is a plain window.
+    set_diff(win, M.has_panes(state), state.pair)
     return
   end
   if not M.is_file_buf(buf) or not M.has_panes(state) then

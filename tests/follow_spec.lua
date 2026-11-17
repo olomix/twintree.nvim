@@ -393,12 +393,101 @@ describe("following", function()
       assert_untouched(wins, "after", before_path("same.txt"))
     end)
 
-    it("still diffs the remaining pane on its recorded file", function()
+    it("does not diff the remaining pane on its recorded file", function()
       local s = state()
       api.nvim_win_close(s.wins.after, true)
+      vim.v.errmsg = ""
       edit("before", before_path("same.txt"))
       vim.cmd.buffer(s.bufs.before)
-      assert.is_true(vim.wo[s.wins.before].diff)
+      -- Alone, a pane is a plain window.
+      assert.equals(before_path("a.txt"), name(s.wins.before))
+      assert.is_false(vim.wo[s.wins.before].diff)
+      assert.equals("", vim.v.errmsg)
+    end)
+  end)
+
+  describe("while the layout changes under a jump", function()
+    local messages, notify, armed
+
+    local function once(event, pattern, fn)
+      table.insert(
+        armed,
+        api.nvim_create_autocmd(event, { pattern = pattern, once = true, callback = fn })
+      )
+    end
+
+    before_each(function()
+      messages, armed = {}, {}
+      notify = vim.notify
+      vim.notify = function(msg, level)
+        table.insert(messages, { msg = msg, level = level })
+      end
+      vim.v.errmsg = ""
+    end)
+
+    after_each(function()
+      vim.notify = notify
+      for _, id in ipairs(armed) do
+        pcall(api.nvim_del_autocmd, id)
+      end
+    end)
+
+    it("keeps the file the user jumped to when the other pane is closed", function()
+      local s = state()
+      once("BufReadPost", after_path("same.txt"), function()
+        api.nvim_win_close(s.wins.after, true)
+      end)
+      local ok, err = pcall(edit, "before", before_path("same.txt"))
+      assert.is_true(ok, tostring(err))
+      assert.equals(before_path("same.txt"), name(s.wins.before))
+      assert.is_false(vim.wo[s.wins.before].diff)
+      assert.same({
+        { msg = "twintree: " .. session.BROKEN_LAYOUT, level = vim.log.levels.ERROR },
+      }, messages)
+      assert.equals("", vim.v.errmsg)
+      assert.equals("a.txt", state().selected)
+    end)
+
+    it("reports a tab closed while the counterpart is shown", function()
+      vim.cmd.tabnew()
+      local other = api.nvim_get_current_win()
+      api.nvim_set_current_tabpage(tab)
+      once("BufReadPost", after_path("same.txt"), function()
+        vim.cmd("tabclose!")
+      end)
+      local ok, err = pcall(edit, "before", before_path("same.txt"))
+      assert.is_true(ok, tostring(err))
+      assert.is_false(api.nvim_tabpage_is_valid(tab))
+      assert.same({
+        { msg = "twintree: " .. session.TAB_GONE, level = vim.log.levels.ERROR },
+      }, messages)
+      assert.equals("", vim.v.errmsg)
+      assert.equals(other, api.nvim_get_current_win())
+      assert.equals("", name(other))
+    end)
+
+    it("raises nothing when the pane a file moves to is closed meanwhile", function()
+      local s = state()
+      local treeview = require("twintree.treeview")
+      local draw = treeview.draw
+      vim.fn.setqflist({ { filename = before_path("same.txt"), lnum = 3, col = 1 } })
+      api.nvim_set_current_win(s.wins.after)
+      -- Stands in for an autocommand that closes the pane once both
+      -- files are shown.
+      treeview.draw = function(...)
+        if state().pair.before == before_path("same.txt") then
+          treeview.draw = draw
+          api.nvim_win_close(s.wins.before, true)
+        end
+        return draw(...)
+      end
+      local ok, err = pcall(vim.cmd, "cc 1")
+      vim.wait(100)
+      treeview.draw = draw
+      assert.is_true(ok, tostring(err))
+      assert.is_false(api.nvim_win_is_valid(s.wins.before))
+      assert.equals("", vim.v.errmsg)
+      assert.same({}, messages)
     end)
   end)
 
