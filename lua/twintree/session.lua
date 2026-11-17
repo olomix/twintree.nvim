@@ -473,6 +473,8 @@ end
 ---  back
 ---@field changed table<string, { win: integer, buf: integer }> per pane,
 ---  the window that was changed and the buffer it showed
+---@field bufs? { before: integer, after: integer } buffers of the pair
+---  that was attempted
 
 ---Take back an attempt to show a pair: the session records the previous
 ---pair again and the panes changed for it show what they showed before.
@@ -492,9 +494,19 @@ local function take_back(tab, attempt)
     -- Only the window the attempt changed: a layout reset run by an
     -- autocommand in between leaves new panes it never touched.
     if state.wins[pane] == change.win and vim.api.nvim_win_is_valid(change.win) then
+      -- While it still shows the attempted file: switched off later, diff
+      -- mode would leave that file behind as a third side of the diff.
+      set_diff(change.win, false)
       -- A loaded buffer: no swap file is consulted, so the API call is safe.
       local back = vim.api.nvim_buf_is_valid(change.buf) and change.buf or M.placeholder()
       pcall(vim.api.nvim_win_set_buf, change.win, back)
+    end
+  end
+  -- Also the file of a pane that was closed with diff mode on.
+  for _, pane in ipairs(PANES) do
+    local buf = attempt.bufs and attempt.bufs[pane]
+    if buf and vim.api.nvim_buf_is_valid(buf) then
+      leave_diff(tab, buf)
     end
   end
   -- A pane without a partner is a plain window.
@@ -526,6 +538,7 @@ local function show_pair(tab, pair, opts, attempt)
   state.pair = pair
   state.selected = M.entry_path(state, pair)
   state.bufs = { before = pair_buf(pair.before), after = pair_buf(pair.after) }
+  attempt.bufs = state.bufs
   -- Saved before any window changes: the events fired below find the
   -- buffers recorded and do not follow them again.
   M.save(tab, state)
@@ -639,7 +652,12 @@ function M.show_pair(tab, pair, opts)
     ok, err = false, problem
   end
   if not ok and attempt.previous then
-    pcall(take_back, tab, attempt)
+    local undone, undo_err = pcall(take_back, tab, attempt)
+    -- The same rule as above: with the layout intact, an error is a bug.
+    if not undone and not M.layout_problem(tab) then
+      showing = false
+      error(undo_err, 0)
+    end
   end
   showing = false
   return ok, err

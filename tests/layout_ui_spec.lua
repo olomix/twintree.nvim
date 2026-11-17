@@ -698,6 +698,28 @@ describe("layout", function()
       assert.is_false(vim.wo[s.wins.before].diff)
     end)
 
+    it("raises nothing when the new tree window is closed while the file is shown", function()
+      local shown = api.nvim_buf_get_name(state().bufs.before)
+      local id = api.nvim_create_autocmd("BufWinEnter", {
+        pattern = shown,
+        once = true,
+        callback = function()
+          api.nvim_win_close(state().wins.tree, true)
+        end,
+      })
+      local messages, restore = capture_notify()
+
+      local ok, result = pcall(twintree.reset_layout)
+      pcall(api.nvim_del_autocmd, id)
+      restore()
+      assert.is_true(ok, tostring(result))
+      assert.same({}, messages)
+      local s = state()
+      assert.is_nil(session.tree_win(s))
+      assert.equals("src/b.txt", s.selected)
+      assert.equals(s.wins.after, api.nvim_get_current_win())
+    end)
+
     it("works in a tab that has no room for another window", function()
       select("a.txt")
       api.nvim_set_current_win(state().wins.after)

@@ -283,6 +283,57 @@ describe("showing a file while the layout changes", function()
     assert.same(before.viewed, s.viewed)
   end)
 
+  it("takes the file of a failed attempt out of the diff", function()
+    ---Whether a line of a pane is highlighted as changed.
+    local function has_changes(win)
+      return api.nvim_win_call(win, function()
+        real_cmd.diffupdate()
+        for lnum = 1, vim.fn.line("$") do
+          if vim.fn.diff_hlID(lnum, 1) ~= 0 then
+            return true
+          end
+        end
+        return false
+      end)
+    end
+
+    -- The before pane already shows b.txt in diff mode when the after
+    -- pane goes away.
+    after_diff("diffthis", 1, close("after"))
+    assert.is_false(session.show(tab, entry("b.txt")))
+    assert(twintree.reset_layout())
+
+    -- c.txt is the same on both sides. A buffer of b.txt left in the diff
+    -- would make it a three-way diff with changed lines.
+    local s = state()
+    api.nvim_set_current_win(s.wins.after)
+    vim.cmd.edit(repo .. "/c.txt")
+    assert.equals(s.before.root .. "/c.txt", name(s.wins.before))
+    assert.is_true(vim.wo[s.wins.before].diff)
+    assert.is_false(has_changes(s.wins.before))
+    assert.is_false(has_changes(s.wins.after))
+  end)
+
+  it("raises an error of the taking back itself when the layout is intact", function()
+    local swap = require("twintree.swap")
+    local open, draw = swap.open, treeview.draw
+    local s = state()
+    swap.open = function(win, buf, keepalt)
+      if win == s.wins.after then
+        return false, swap.DECLINED
+      end
+      return open(win, buf, keepalt)
+    end
+    treeview.draw = function()
+      error("a bug while taking back", 0)
+    end
+    local ran, err = pcall(session.show, tab, entry("b.txt"))
+    swap.open, treeview.draw = open, draw
+    assert.is_false(ran)
+    assert.equals("a bug while taking back", err)
+    assert.is_nil(session.layout_problem(tab))
+  end)
+
   it("raises an error that the layout does not explain", function()
     local draw = treeview.draw
     treeview.draw = function()

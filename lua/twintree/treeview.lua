@@ -268,7 +268,8 @@ end
 ---@param win integer
 function M.focus_selected(tab, win)
   local state = session.get(tab)
-  if not state then
+  -- The window can be closed by an autocommand since the caller found it.
+  if not state or not vim.api.nvim_win_is_valid(win) then
     return
   end
   for row, line in ipairs(lines_of(state)) do

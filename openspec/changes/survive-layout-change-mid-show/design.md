@@ -116,8 +116,16 @@ and, per pane, the window it changed and the buffer that window showed.
   that was changed gets its previous buffer back when its window is
   still valid and still the pane of the session; a layout reset run by
   user code in between leaves new panes that the attempt never touched.
-  Every pane that is left has diff mode switched off: a pane without a
-  partner is a plain window.
+  Diff mode is switched off in such a window before the buffer goes
+  back, and the buffers of the attempted pair are taken out of the diff
+  of the tab: a buffer that leaves a diff window stays a side of the
+  diff otherwise, and the next pair would be compared three ways. Every
+  pane that is left has diff mode switched off: a pane without a partner
+  is a plain window.
+
+Taking back follows the rule of decision 1 for its own errors: one that
+is raised while the tab and both panes are there is raised to the
+caller.
 
 `undo_pair` becomes this function. With both panes still there, which is
 the declined swap file, it behaves as today: diff mode comes back in a
@@ -148,6 +156,9 @@ raises nothing, and the file counts as shown, as today.
   current, valid diff tab, returns its existing "closed while its layout
   was reset" result and does nothing else. It checks the after pane and
   the tree window before it enters one of them.
+- `treeview.focus_selected` does nothing for a window that is no longer
+  valid, for every caller: the tree window can be closed while a file is
+  shown.
 - `open`: when showing the first file fails and the tab is gone, it is a
   failed open: the worktrees the command created are removed and `nil`
   with the message is returned. A first file that is not opened while

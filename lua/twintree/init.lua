@@ -268,7 +268,8 @@ function M.reset_layout()
       return nil, GONE
     end
     if not shown then
-      -- The layout is rebuilt either way; only the file is missing.
+      -- The windows were rebuilt. The file was not opened, or an
+      -- autocommand closed a new pane while it was shown.
       vim.notify("twintree: " .. show_err, vim.log.levels.ERROR)
     end
   end
