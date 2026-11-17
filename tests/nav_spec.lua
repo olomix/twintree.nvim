@@ -453,6 +453,19 @@ describe("moving between changed files", function()
     assert.equals("d/a.txt", shown())
   end)
 
+  it("takes the last visible file when the last file is in a collapsed directory", function()
+    local files, changes = {}, {}
+    for _, path in ipairs({ "d/a.txt", "d/b.txt", "e/c.txt" }) do
+      files[path], changes[path] = "old\n", "new\n"
+    end
+    open(files, changes)
+    collapse("e")
+    assert.is_true(run("last"))
+    assert.equals("d/b.txt", shown())
+    assert.is_false(run("next"))
+    assert.same({ { msg = "twintree: no more changed files", level = INFO } }, messages)
+  end)
+
   describe("with nothing shown yet", function()
     before_each(function()
       -- Opened before the files change, so that the panes start empty.
