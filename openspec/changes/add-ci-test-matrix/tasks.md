@@ -14,7 +14,7 @@
 - [x] 2.2 Read the log of each job. For each one verify that every spec file printed its summary line, and list every failure and error. Find the cause of each failing spec and correct the spec when it depends on the developer's machine (design decision 7), without changing anything under `lua/` or `plugin/`; when the known 0.11 case fails on `nvim stable` too, stop and report
 - [x] 2.3 For each of the three jobs, find out whether the cases of `tests/resize_spec.lua` ran or were skipped: verify by the skip lines in the log, or their absence, not by the summary of the file, and quote the result per Neovim version in the pull request
 - [x] 2.4 With the fixes of 2.2 in, decide the `oldest` entry from its log by the table of design decision 4; verify that the entry and its comment match the row that applies, and stop and report for the last row
-- [ ] 2.5 Run the whole workflow at least three times in total with `gh run rerun` on the pull request's run, waiting for each to finish. For every run verify that `nvim stable` passed, and read the failures of `nvim oldest` whatever its flag: they are none, or exactly the known case. A case that passes in one run and fails in another is handled by decisions 4 and 7 before going on
+- [x] 2.5 Run the whole workflow at least three times in total with `gh run rerun` on the pull request's run, waiting for each to finish. For every run verify that `nvim stable` passed, and read the failures of `nvim oldest` whatever its flag: they are none, or exactly the known case. A case that passes in one run and fails in another is handled by decisions 4 and 7 before going on
 
 ## 3. Documentation
 
@@ -23,5 +23,5 @@
 
 ## 4. Checks
 
-- [ ] 4.1 Run `make test` locally with the stable or the nightly Neovim, `actionlint`, and `openspec validate add-ci-test-matrix --strict`; verify all three pass and that the last run of the workflow on the branch is green
+- [x] 4.1 Run `make test` locally with the stable or the nightly Neovim, `actionlint`, and `openspec validate add-ci-test-matrix --strict`; verify all three pass and that the last run of the workflow on the branch is green
 - [ ] 4.2 After the pull request is merged: verify that the run for the push to `main` is green, that `gh workflow run test.yml` starts a run, and that the badge in the README shows the state of `main`. This task stays open until the merge
