@@ -87,6 +87,10 @@ function M.open(revs)
   if first then
     local ok, show_err = session.show(tab, first)
     if not ok then
+      if not session.get(tab) then
+        -- An autocommand closed the tab on the way: nothing was opened.
+        return fail(show_err)
+      end
       -- The session stays open: the tree is still of use without the file.
       return tab, show_err
     end
@@ -260,16 +264,24 @@ function M.reset_layout()
   local shown, show_err = false, nil
   if pair then
     shown, show_err = session.show_pair(tab, pair)
+    if not tab_is_current() then
+      return nil, GONE
+    end
     if not shown then
-      -- The layout is rebuilt either way; only the file is missing.
+      -- The windows were rebuilt. The file was not opened, or an
+      -- autocommand closed a new pane while it was shown.
       vim.notify("twintree: " .. show_err, vim.log.levels.ERROR)
     end
   end
-  if shown then
+  if shown and vim.api.nvim_win_is_valid(after_win) then
     vim.api.nvim_set_current_win(after_win)
   else
-    session.clear_selection(tab)
-    vim.api.nvim_set_current_win(tree_win)
+    if not shown then
+      session.clear_selection(tab)
+    end
+    if vim.api.nvim_win_is_valid(tree_win) then
+      vim.api.nvim_set_current_win(tree_win)
+    end
   end
   treeview.draw(tab)
   treeview.focus_selected(tab, tree_win)
