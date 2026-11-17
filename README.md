@@ -1,5 +1,7 @@
 # twintree.nvim
 
+[![test](https://github.com/olomix/twintree.nvim/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/olomix/twintree.nvim/actions/workflows/test.yml)
+
 A Neovim diff viewer where both sides of the diff are browsable code.
 
 Diff tools usually show only the changed hunks, or put the old version into a
@@ -278,5 +280,26 @@ looked up in `$PLENARY_DIR`, then in `stdpath("data")/lazy/plenary.nvim`.
 ```sh
 make test
 ```
+
+GitHub Actions runs `make test` for every pull request, for every push to
+`main` and once a week, on three Neovim versions: the oldest supported
+release (`nvim oldest`), the latest stable release (`nvim stable`) and
+nightly (`nvim nightly`). All specs run there, also the ones that need a
+terminal.
+
+A failure of `nvim oldest` or `nvim stable` fails the run. `nvim nightly`
+is informational: its check on a pull request can be red while the run is
+green, and that blocks nothing.
+
+To reproduce a red job, install the Neovim build its log names, check out
+plenary.nvim at the commit named in `.github/workflows/test.yml`, and run:
+
+```sh
+PLENARY_DIR=/absolute/path/to/plenary.nvim make test
+```
+
+GitHub disables the whole workflow, for every trigger, after sixty days
+without activity in the repository. Enable it again in the Actions tab or
+with `gh workflow enable test.yml`.
 
 See `:help twintree` for the full documentation.

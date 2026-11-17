@@ -16,10 +16,6 @@
 - Clean up when a diff tab closes: remove the worktree buffers that are not
   shown anywhere else, so they do not stay in the buffer list and keep the
   language server of the old worktree running.
-- Add GitHub Actions workflows that run `make test` on several Neovim
-  versions: the oldest one the README supports, the latest stable release
-  and nightly. The specs that need a pseudo-terminal may have to be
-  skipped there.
 - Make showing a file safe when the layout changes while it is being
   shown. Found by plan reviews of the changed-file navigation; not fixed
   there.
