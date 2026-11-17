@@ -223,6 +223,12 @@ function M.create(repo, before, after, tree_buf)
 
   M.setup_tree_window(tree_win)
   local before_win, after_win = M.open_panes(tree_win)
+  -- Give the tree a previous window. Neovim before 0.13 runs `:windo`
+  -- from the previous window when the current one has 'winfixbuf', and
+  -- splits the current one when there is none; netrw runs `:windo` for
+  -- VimEnter, so `nvim +Twintree` got a second tree window.
+  vim.cmd(("noautocmd call win_gotoid(%d)"):format(after_win))
+  vim.cmd(("noautocmd call win_gotoid(%d)"):format(tree_win))
 
   M.save(tab, {
     repo = repo,
