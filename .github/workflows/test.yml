@@ -1,0 +1,75 @@
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Weekly, for breakage that arrives with a Neovim release while nothing
+    # is pushed here. Off the hour, when scheduled runs are delayed least.
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  # A group holds one pending run and replaces it with a newer one, so
+  # every run on main gets a group of its own. Pull request runs share a
+  # group per ref: a newer push cancels the run it supersedes.
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # Not the default name, which lists the matrix values and so would
+    # change with the 0.11 tag and the experimental flag.
+    name: nvim ${{ matrix.role }}
+    runs-on: ubuntu-latest
+    # For a spec that waits for input; the suite takes about two minutes.
+    timeout-minutes: 15
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - role: oldest
+            # The oldest Neovim the README supports. The setup action
+            # needs an exact tag; bump it by hand for a newer 0.11.
+            version: v0.11.7
+            experimental: false
+          - role: stable
+            version: stable
+            experimental: false
+          - role: nightly
+            version: nightly
+            # Neovim's development branch must not turn main red.
+            experimental: true
+    env:
+      # Absolute: the specs change directory, and plenary loads modules
+      # late, which a relative runtime path no longer finds by then.
+      PLENARY_DIR: ${{ github.workspace }}/.deps/plenary.nvim
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # After the checkout above, which removes untracked files.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: nvim-lua/plenary.nvim
+          # Head of master on 2026-04-10; plenary publishes no releases.
+          ref: 74b06c6c75e4eeb3108ec01852001636d85a932b
+          path: .deps/plenary.nvim
+          persist-credentials: false
+      - uses: rhysd/action-setup-vim@febef33995d6649302e9d88dda81e071b68f16a7 # v1.6.1
+        with:
+          neovim: true
+          version: ${{ matrix.version }}
+      - name: Neovim build
+        run: nvim --version
+      # Without plenary, headless Neovim stays open after the error and the
+      # job would run into its timeout.
+      - name: plenary is where the tests look for it
+        run: test -f "$PLENARY_DIR/plugin/plenary.vim"
+      - name: make test
+        run: make test
