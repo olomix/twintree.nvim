@@ -176,12 +176,12 @@ file buffers located in the root directory of their side.
   pane shows it under its new path, in diff mode against each other
 
 ### Requirement: Cursor on the first change of a file shown for the first time
-When a file is shown by selecting it in the tree, or as the first file when
-a session opens, and the session has not shown that file before, the cursor
-of the after pane SHALL be on the first change of the file and the before
-pane SHALL be on the corresponding line. The change SHALL be visible in
-both panes. A file reached by navigation SHALL keep the cursor the
-navigation gave it.
+When a file is shown by selecting it in the tree, by a command that moves
+between the changed files, or as the first file when a session opens, and
+the session has not shown that file before, the cursor of the after pane
+SHALL be on the first change of the file and the before pane SHALL be on
+the corresponding line. The change SHALL be visible in both panes. A file
+that a jump inside a pane brings in SHALL keep the cursor the jump gave it.
 
 #### Scenario: Change far below the top
 - **WHEN** the user selects a modified file whose first change is further
@@ -239,11 +239,18 @@ navigation gave it.
 - **THEN** the first attempt reports that a pane is missing without a Lua
   error, and the second shows the file with the cursor on its first change
 
+#### Scenario: File shown by a command
+- **WHEN** the user runs `:TwintreeNextFile` and the session has not shown
+  the next file before
+- **THEN** the cursor of the after pane is on the first change of that
+  file and the before pane is on the corresponding line
+
 ### Requirement: Cursor returns to where it was left
-When the user selects in the tree a file the session has already shown, the
-cursor SHALL be on the position it had when the panes last showed that
-file, and SHALL NOT be moved to the first change. A file counts as shown
-whether it was selected in the tree or reached by navigation.
+When a file the session has already shown is selected in the tree or shown
+by a command that moves between the changed files, the cursor SHALL be on
+the position it had when the panes last showed that file, and SHALL NOT be
+moved to the first change. A file counts as shown whether it was selected
+in the tree, shown by such a command, or reached by a jump inside a pane.
 
 #### Scenario: Returning through the tree
 - **WHEN** the user selects a file, moves the cursor in the after pane,
@@ -270,6 +277,11 @@ whether it was selected in the tree or reached by navigation.
 - **WHEN** a file was shown in one diff tab and is selected for the first
   time in another diff tab
 - **THEN** the cursor of that other tab's after pane is on the first change
+
+#### Scenario: Returning with a command
+- **WHEN** the user moves the cursor in a file, runs `:TwintreeNextFile`
+  and then `:TwintreePrevFile`
+- **THEN** the cursor of the after pane is on the line it was left on
 
 ### Requirement: Panes stay browsable
 Each code pane SHALL allow navigation to any other buffer. When navigation
