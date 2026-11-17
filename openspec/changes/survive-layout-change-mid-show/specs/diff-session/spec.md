@@ -30,6 +30,12 @@ gone, no window of another tab SHALL be changed.
 - **THEN** one line says a pane is missing, the session records the files
   from before the attempt, and the pane that is left is not in diff mode
 
+#### Scenario: The file of a failed attempt leaves the diff
+- **WHEN** a pane went away after the other pane already showed the new
+  file in diff mode, the layout is restored, and the panes then compare a
+  file that is the same on both sides
+- **THEN** no line of that file is highlighted as changed
+
 #### Scenario: Not counted as shown
 - **WHEN** a file was not shown because a pane went away, the layout is
   restored with `:TwintreeResetLayout`, and the user selects the file

@@ -68,6 +68,8 @@ None.
   `show`, `follow`, `move_to_own_pane`.
 - `lua/twintree/init.lua`: `open` and `reset_layout`, which use windows
   after `show_pair` returns.
+- `lua/twintree/treeview.lua`: `focus_selected` ignores a window that was
+  closed.
 - `tests/`: new specs that close a pane or the tab from real
   autocommands at each step.
 - `TODO.md`: the item about layout safety goes.
