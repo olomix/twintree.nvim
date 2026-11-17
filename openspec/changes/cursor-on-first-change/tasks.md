@@ -2,7 +2,7 @@
 
 ## 1. Remember what the session has shown
 
-- [x] 1.1 Add the `viewed` field to the session record in `lua/twintree/session.lua`: document it on `twintree.Session`, default it in `session.get`, and have `show_pair` add the file buffers of both panes after it succeeded, not the placeholder (design decision 3); verify with specs in `tests/session_spec.lua` that after a selection the buffers of both panes are recorded, that a deleted file records only its before buffer, that a declined or failed show records nothing, and that a session record without the field still works
+- [x] 1.1 Add the `viewed` field to the session record in `lua/twintree/session.lua`: document it on `twintree.Session`, default it in `session.get`, and have `show_pair` add the file buffers of both panes after it succeeded, not the placeholder (design decision 3); verify with specs in `tests/session_spec.lua` that after a selection the buffers of both panes are recorded, that a deleted file records only its before buffer, that a declined show (`tests/swap_ui_spec.lua`) or a failed one records nothing, and that a session record without the field still works
 
 ## 2. Cursor on the first change
 
@@ -21,7 +21,7 @@
 
 ## 4. Broken layout
 
-- [x] 4.1 Check the pane window for validity before the jump (design decision 6); verify with specs in `tests/layout_ui_spec.lua` that selecting a file with a pane closed reports the missing pane without a Lua error and records nothing, that after `:TwintreeResetLayout` the same file is shown on its first change, and that a window closed by an autocommand while the buffers load gives no Lua error
+- [x] 4.1 Check the pane window for validity before the jump (design decision 6); verify with specs in `tests/layout_ui_spec.lua` that selecting a file with a pane closed reports the missing pane without a Lua error and records nothing, that after `:TwintreeResetLayout` the same file is shown on its first change, and that a window closed after both files were shown gives no Lua error
 
 ## 5. Documentation
 

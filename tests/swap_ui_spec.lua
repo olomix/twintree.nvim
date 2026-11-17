@@ -204,7 +204,9 @@ describe("swap files", function()
     for label, choice in pairs({ Quit = 5, Abort = 6, ["a dismissed prompt"] = 0 }) do
       it("leave empty panes on " .. label, function()
         answer = choice
+        local viewed = state().viewed
         select("a.txt")
+        assert.same(viewed, state().viewed)
 
         local s = state()
         assert.equals("twintree://empty", name(s.wins.before))
@@ -226,10 +228,15 @@ describe("swap files", function()
     it("keep the previous pair when the next file is declined", function()
       select("b.txt")
       local lines = h.tree_lines(state().tree_buf)
+      local viewed = state().viewed
+      assert.equals(2, vim.tbl_count(viewed))
       answer = 6
       select("a.txt")
 
       local s = assert_pair("b.txt")
+      -- The before side of a.txt was loaded before the after side was
+      -- declined, and is not recorded as shown.
+      assert.same(viewed, s.viewed)
       assert.equals("b.txt", s.pair.after:match("[^/]+$"))
       assert.same(lines, h.tree_lines(s.tree_buf))
       assert.equals(1, #errors())

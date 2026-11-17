@@ -579,16 +579,18 @@ end
 ---other diff window follows, because the two are bound.
 ---@param win integer
 local function goto_first_change(win)
-  -- Loading the buffers runs autocommands of the user, which can close it.
+  -- An autocommand of the user can close it once both files are shown.
   if not vim.api.nvim_win_is_valid(win) then
     return
   end
-  -- A jump that fails leaves the cursor at the top; the file is shown.
+  -- A jump that fails leaves the cursor where it is; the file is shown.
   pcall(vim.api.nvim_win_call, win, function()
     vim.cmd("keepjumps normal! gg")
-    -- `]c` skips a change that starts on the first line.
-    if vim.fn.diff_hlID(1, 1) == 0 and vim.fn.diff_filler(1) == 0 then
-      vim.cmd("keepjumps normal! ]c")
+    vim.cmd("keepjumps normal! ]c")
+    -- `]c` skips a change on the first line, or one made of lines missing
+    -- above it. `[c` goes back to it and stays put when there is none.
+    if vim.fn.line(".") > 1 then
+      vim.cmd("keepjumps normal! [c")
     end
   end)
 end

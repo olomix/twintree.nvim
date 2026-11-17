@@ -29,6 +29,9 @@ are not the current window:
 - `]c` from line 1 skips a change that starts on line 1, and one that is
   only filler lines above line 1.
 - `]c` in a file without changes does not move and does not raise.
+- `[c` from the first change does not move and does not raise; from a
+  later change it goes to a change on line 1, also one that is only lines
+  missing above it, with and without `filler` in `'diffopt'`.
 
 ## Goals / Non-Goals
 
@@ -50,17 +53,23 @@ are not the current window:
 ### 1. The jump is Neovim's own `]c`
 
 After the pair is shown, in the window that gets the jump:
-`keepjumps normal! gg`, then `keepjumps normal! ]c` unless line 1 already
-is part of a change (`diff_hlID(1, 1) ~= 0` or `diff_filler(1) > 0`).
-`normal!` ignores a user mapping of `]c`; `keepjumps` keeps the jump list
-clean. The call is wrapped in `pcall`: a failed jump leaves the cursor at
-the top, it must not fail the selection.
+`keepjumps normal! gg`, then `keepjumps normal! ]c`, and when that moved
+the cursor, `keepjumps normal! [c`. The step back is for a change `]c`
+skipped because it starts on line 1 or consists of lines missing above
+it; with no such change `[c` does not move. `normal!` ignores user
+mappings of both keys; `keepjumps` keeps the jump list clean. The call is
+wrapped in `pcall`: a failed jump must not fail the selection.
+
+Alternative: ask `diff_hlID(1, 1)` and `diff_filler(1)` whether line 1 is
+part of a change and skip `]c` then. Used at first and replaced after
+review: it rests on what `diff_filler()` reports when `'diffopt'` has no
+`filler`, which the two motions do not depend on.
 
 Alternative: compute the first hunk with `vim.diff` on the buffer lines.
 Rejected: it would disagree with the highlighting whenever `'diffopt'`
 changes what counts as a change (`iwhite`, `algorithm:`, `linematch:`).
 
-### 2. One jump, in the pane that takes the focus
+### 2. The jump is made in one pane, the one that takes the focus
 
 The jump runs in the after window when the pair has an after file,
 otherwise in the before window. The other pane follows through
@@ -123,9 +132,11 @@ the specs show that Neovim's own position is not reliable.
 `show` already returns the missing pane message before anything is shown,
 and the buffer is then not added to `viewed`, so the file still gets its
 jump once the layout is back. After `show_pair` succeeded, the window is
-checked for validity again before the jump, because the events fired while
-the buffers are loaded can run user autocommands that close it; a window
-that is gone means no jump and no error.
+checked for validity again before the jump: once both files are shown,
+drawing the tree and the options diff mode sets can still run an
+autocommand of the user that closes it. A window that is gone means no
+jump and no error. A pane closed earlier, while the buffers load, does
+not get this far; that path is as it was before this change.
 
 ### 7. A pair with a placeholder does not scroll together
 

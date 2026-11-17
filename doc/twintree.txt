@@ -52,8 +52,9 @@ COMMANDS                                                    *twintree-commands*
     panes are empty and the cursor is in the tree.
 
     A file that is shown for the first time, when the diff opens or after
-    `<CR>` in the tree, has the cursor on its first change, as after `gg]c`
-    but without an entry in the jump list. A file the diff has shown before
+    `<CR>` in the tree, has the cursor on its first change, which can be
+    the first line. The jump list gets no entry. A file the diff has shown
+    before
     has the cursor where it was left. A file reached by a jump (definition,
     quickfix entry, `:edit`) keeps the cursor of the jump and counts as
     shown. An added or deleted file is shown from its top.
