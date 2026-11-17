@@ -126,6 +126,11 @@ describe("keys", function()
       pcall(vim.keymap.del, { "n", "x", "o" }, lhs)
       pcall(vim.keymap.del, "n", lhs, { buffer = 0 })
     end
+    -- Keys of the leader specs, under every leader they use.
+    for _, lhs in ipairs({ " n", ",n", "\\n" }) do
+      pcall(api.nvim_del_keymap, "n", lhs)
+    end
+    vim.g.mapleader = nil
     assert.same({}, vim.g.twintree_keys)
   end)
 
@@ -486,6 +491,97 @@ describe("keys", function()
       vim.cmd.tabprevious()
       assert.equals("user next", desc(NEXT))
       assert.equals("user prev", desc(PREV))
+    end)
+  end)
+
+  it("release a key recorded without its stored form", function()
+    user_map(NEXT, "user")
+    vim.cmd.edit(repo .. "/a.txt")
+    open()
+    -- As a record written by a version that did not keep that form.
+    local records = vim.g.twintree_keys
+    records.next_file.raw, records.prev_file.raw = nil, nil
+    vim.g.twintree_keys = records
+
+    vim.cmd.tabprevious()
+    assert.equals("user", desc(NEXT))
+    assert.is_nil(global(PREV))
+    assert.same({}, vim.g.twintree_keys)
+  end)
+
+  describe("with the leader in them", function()
+    ---The description of the global mapping whose key is shown as `lhs`.
+    local function shown_as(lhs)
+      for _, mapping in ipairs(api.nvim_get_keymap("n")) do
+        if mapping.lhs == lhs then
+          return mapping.desc or "(no description)"
+        end
+      end
+      return nil
+    end
+
+    it("use the leader of the moment they are bound, not of setup", function()
+      vim.g.mapleader = nil
+      twintree.setup({ cache_dir = cache, keys = { next_file = "<Leader>n", prev_file = false } })
+      -- As in a configuration that sets the leader after the plugins.
+      vim.g.mapleader = " "
+      vim.keymap.set("n", "<Leader>n", "<Nop>", { desc = "user" })
+      assert.equals("user", shown_as(" n"))
+
+      vim.cmd.edit(repo .. "/a.txt")
+      local tab = open()
+      assert.equals(OURS_NEXT, shown_as(" n"))
+      assert.equals("user", vim.g.twintree_keys.next_file.saved.desc)
+      press(" n")
+      assert.equals("b.txt", shown(tab))
+
+      vim.cmd.tabprevious()
+      assert.equals("user", shown_as(" n"))
+      assert.same({}, vim.g.twintree_keys)
+      vim.cmd.tabnext()
+      assert.equals(OURS_NEXT, shown_as(" n"))
+      vim.cmd.tabclose()
+      assert.equals("user", shown_as(" n"))
+    end)
+
+    it("are released under the leader they were bound with", function()
+      vim.g.mapleader = ","
+      twintree.setup({ cache_dir = cache, keys = { next_file = "<Leader>n", prev_file = false } })
+      vim.keymap.set("n", ",n", "<Nop>", { desc = "user comma" })
+      vim.cmd.edit(repo .. "/a.txt")
+      local tab = open()
+      assert.equals(OURS_NEXT, shown_as(",n"))
+
+      -- The leader changes while the key is bound.
+      vim.g.mapleader = " "
+      vim.cmd.tabprevious()
+      assert.equals("user comma", shown_as(",n"))
+      assert.is_nil(shown_as(" n"))
+      assert.same({}, vim.g.twintree_keys)
+
+      -- From now on the key is the one of the new leader.
+      vim.cmd.tabnext()
+      assert.equals(OURS_NEXT, shown_as(" n"))
+      assert.equals("user comma", shown_as(",n"))
+      press(" n")
+      assert.equals("b.txt", shown(tab))
+      vim.cmd.tabclose()
+      assert.is_nil(shown_as(" n"))
+      assert.equals("user comma", shown_as(",n"))
+    end)
+
+    it("move to the new leader at the next tab change when it changes in a diff tab", function()
+      vim.g.mapleader = ","
+      twintree.setup({ cache_dir = cache, keys = { next_file = "<Leader>n", prev_file = false } })
+      vim.cmd.edit(repo .. "/a.txt")
+      open()
+      vim.g.mapleader = " "
+      require("twintree.keys").sync()
+      assert.is_nil(shown_as(",n"))
+      assert.equals(OURS_NEXT, shown_as(" n"))
+      vim.cmd.tabprevious()
+      assert.is_nil(shown_as(" n"))
+      assert.is_nil(shown_as(",n"))
     end)
   end)
 

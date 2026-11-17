@@ -27,12 +27,19 @@ local raw_keys = {}
 ---The form in which Neovim stores a key as the left-hand side of a
 ---mapping. `vim.keycode()` is not that form: it makes `<C-I>` and `<Tab>`
 ---one key, which Neovim maps separately.
+---The form depends on the leader keys of the moment for a key written
+---with `<Leader>`, so it must not be remembered across a change of them.
 ---@param key string
 ---@return string? raw nil when Neovim cannot map the key
 ---@return string? err
 function M.raw_key(key)
-  if raw_keys[key] then
-    return raw_keys[key]
+  local cached = ("%s\n%s\n%s"):format(
+    key,
+    tostring(vim.g.mapleader),
+    tostring(vim.g.maplocalleader)
+  )
+  if raw_keys[cached] then
+    return raw_keys[cached]
   end
   -- Asking Neovim is the only complete rule: map the key where it
   -- disturbs nothing and read it back.
@@ -43,7 +50,7 @@ function M.raw_key(key)
   if not mapping then
     return nil, tostring(err):match("[^\n]+")
   end
-  raw_keys[key] = mapping.lhsraw
+  raw_keys[cached] = mapping.lhsraw
   return mapping.lhsraw
 end
 

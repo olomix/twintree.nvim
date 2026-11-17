@@ -279,6 +279,18 @@ options and description. Mappings in other modes SHALL NOT be touched.
 - **THEN** the mapping on `<Tab>` is untouched and the plugin's mapping is
   gone
 
+#### Scenario: Key written with the leader
+- **WHEN** the user configured `<Leader>n` for next, set `mapleader`
+  after the call to `setup()`, and has a mapping of their own on that key
+- **THEN** the key shows the next file in a diff tab, and the user's
+  mapping is in place again in every other tab
+
+#### Scenario: Leader changed while a diff tab is current
+- **WHEN** `mapleader` changes while the plugin's key written with
+  `<Leader>` is bound, and another tab becomes current
+- **THEN** the mapping the plugin made under the old leader is gone and
+  what the user had on that key is restored
+
 #### Scenario: Two diff tabs
 - **WHEN** two diff tabs are open and the user presses `]<C-f>` in each
 - **THEN** each tab moves to its own next file

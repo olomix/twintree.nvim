@@ -202,9 +202,13 @@ it), and at the end of `setup()`. `TabLeave` and `TabClosed` are not
 needed: what matters is which tab is current, and `TabEnter` of the next
 tab says so, also after a tab was closed.
 
-The bound keys are recorded in one `g:` variable: per action the key, the
-saved global mapping or nothing, and whether the key was given up
-(decision 9). A `g:` variable survives a reload of the Lua modules, as
+The bound keys are recorded in one `g:` variable: per action the key as
+configured, the form Neovim stored it in when it was bound, the saved
+global mapping or nothing, and whether the key was given up (decision 9).
+The stored form is what later finds, compares and removes the plugin's
+mapping. Found by review: a key written with `<Leader>` names another key
+once `mapleader` changes, which it commonly does between `setup()` and
+the first diff, so the configured text cannot be looked up again later. A `g:` variable survives a reload of the Lua modules, as
 the placeholder buffer number does.
 
 Binding reads the global normal-mode mapping from `nvim_get_keymap`,
