@@ -216,6 +216,8 @@ describe("swap files", function()
         assert.is_nil(s.selected)
         assert.is_nil(s.pair)
         assert.is_nil(s.bufs)
+        -- A declined file is not where next and previous start from.
+        assert.is_nil(s.last_entry)
         assert.same({
           {
             msg = "twintree: a.txt was not opened: the swap file question was declined",
@@ -237,10 +239,44 @@ describe("swap files", function()
       -- The before side of a.txt was loaded before the after side was
       -- declined, and is not recorded as shown.
       assert.same(viewed, s.viewed)
+      assert.equals("b.txt", s.last_entry)
       assert.equals("b.txt", s.pair.after:match("[^/]+$"))
       assert.same(lines, h.tree_lines(s.tree_buf))
       assert.equals(1, #errors())
       assert.equals(1, #asked)
+    end)
+
+    it("stop a move to the next file and can be stepped over", function()
+      -- An added file is listed above a.txt, which has the swap file.
+      h.write(repo, "0.txt", "new\n")
+      require("twintree.treeview").refresh()
+      assert.same(
+        { "0.txt +1 -0 A", "a.txt +1 -1 M", "b.txt +1 -1 M" },
+        h.tree_lines(state().tree_buf)
+      )
+      select("0.txt")
+      local pair = vim.deepcopy(state().pair)
+
+      answer = 6
+      vim.cmd("TwintreeNextFile")
+      local s = state()
+      assert.equals(1, #asked)
+      assert.equals(repo .. "/0.txt", name(s.wins.after))
+      assert.is_true(vim.wo[s.wins.after].diff)
+      assert.equals("0.txt", s.selected)
+      assert.equals("0.txt", s.last_entry)
+      assert.same(pair, s.pair)
+      assert.same({
+        {
+          msg = "twintree: a.txt was not opened: the swap file question was declined",
+          level = vim.log.levels.ERROR,
+        },
+      }, errors())
+
+      vim.cmd("2TwintreeNextFile")
+      assert_pair("b.txt")
+      assert.equals(1, #asked)
+      assert.equals(1, #errors())
     end)
 
     it("ask again when the file is selected again", function()
@@ -450,6 +486,7 @@ describe("swap files", function()
       assert.is_false(vim.wo[s.wins.after].diff)
       assert.is_nil(s.selected)
       assert.is_nil(s.pair)
+      assert.is_nil(s.last_entry)
       assert.equals(tree(), api.nvim_get_current_win())
       assert.truthy(vim.uv.fs_stat(s.before.root .. "/a.txt"))
       return s

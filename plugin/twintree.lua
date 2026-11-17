@@ -43,6 +43,21 @@ vim.api.nvim_create_user_command("TwintreeResetLayout", function()
   end
 end, { desc = "Return the diff tab to tree, before and after windows" })
 
+for name, action in pairs({ TwintreeNextFile = "next", TwintreePrevFile = "prev" }) do
+  vim.api.nvim_create_user_command(name, function(cmd)
+    require("twintree.nav").run(action, cmd.count)
+  end, {
+    count = 1,
+    desc = ("Show the %s changed file of the diff"):format(action == "next" and "next" or "previous"),
+  })
+end
+
+for name, action in pairs({ TwintreeFirstFile = "first", TwintreeLastFile = "last" }) do
+  vim.api.nvim_create_user_command(name, function()
+    require("twintree.nav").run(action)
+  end, { desc = ("Show the %s changed file of the diff"):format(action) })
+end
+
 local group = vim.api.nvim_create_augroup("twintree", { clear = true })
 
 -- BufNew, not BufReadPre: an existing swap file is checked before reading.
@@ -90,6 +105,15 @@ vim.api.nvim_create_autocmd({ "WinResized", "VimResized", "TabEnter" }, {
     require("twintree.layout").sync()
     -- Lines are padded to the width of the tree window.
     require("twintree.treeview").redraw_if_resized()
+  end,
+})
+
+-- Also after a tab was closed: the tab that becomes current is entered.
+vim.api.nvim_create_autocmd("TabEnter", {
+  group = group,
+  desc = "Bind the keys of the plugin in a diff tab, release them elsewhere",
+  callback = function()
+    require("twintree.keys").sync()
   end,
 })
 

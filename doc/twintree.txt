@@ -91,6 +91,46 @@ COMMANDS                                                    *twintree-commands*
 
 Both commands report an error when the current tab has no diff.
 
+                                        *:TwintreeNextFile* *:TwintreePrevFile*
+:[count]TwintreeNextFile
+:[count]TwintreePrevFile
+    Show the next or the previous changed file of the current diff tab in
+    both panes, as `<CR>` on its line in the tree does, except that the
+    current window stays the current one. With a count, move that many
+    files; a count past the end stops at the last file.
+
+    The files come in the order of the tree. Files inside a folded
+    directory are skipped, also when the file shown now is inside one.
+
+    When the panes show a file that is not in the tree, for example after
+    a jump to a definition, the commands continue from the changed file
+    that was shown last. When none was shown yet, next goes to the first
+    file and previous to the last.
+
+    The commands do not start over at the ends. When there is no file to
+    go to, one of these is reported and nothing changes:
+
+        no more changed files ~
+            The first or last file was reached.
+        no changed files ~
+            The diff has no changed files.
+        every changed file is in a collapsed directory ~
+            Unfold a directory in the tree.
+
+    Default keys: see |twintree-keys|.
+
+                                       *:TwintreeFirstFile* *:TwintreeLastFile*
+:TwintreeFirstFile
+:TwintreeLastFile
+    Show the first or the last changed file of the tree that is not inside
+    a folded directory. No key is mapped to them by default: >lua
+
+        vim.keymap.set("n", "]<C-g>", "<Cmd>TwintreeLastFile<CR>")
+<
+    `]<C-S-f>` works only in a terminal that tells Ctrl+Shift+F from
+    Ctrl+F, see |tui-csiu|. Elsewhere Neovim receives `]<C-f>`, and the key
+    shows the next file instead of the last.
+
                                                                *:TwintreeClean*
 :TwintreeClean
     Remove the cached worktrees of the current repository. Worktrees used by
@@ -104,6 +144,37 @@ Tree window (left):
     <CR>    On a file: show it in both panes and move to the after pane.
             On a directory: fold or unfold it.
     R       Recompute the list of changed files.
+
+Anywhere in a diff tab, in normal mode:                        *twintree-keys*
+
+    ]<C-f>  Show the next changed file, as |:TwintreeNextFile|.
+    [<C-f>  Show the previous changed file, as |:TwintreePrevFile|.
+
+    Both take a count. The keys are set with the `keys` option of
+    |twintree.setup()|.
+
+    The keys exist only while a diff tab is the current tab. When another
+    tab becomes current, the global normal-mode mapping you had on a key
+    is put back, with its options and description, and a key you had not
+    mapped is unmapped again.
+
+    Only normal mode is touched. A mapping made with `:map` keeps working
+    in every mode; afterwards `:map` lists it as two entries, one for
+    normal mode and one for the other modes.
+
+    A buffer-local mapping on the same key, of yours or of another plugin,
+    takes precedence in that buffer. Choose other keys if needed.
+
+    When you map or unmap one of the keys while a diff tab is current, the
+    plugin leaves that key alone, in this and in other diff tabs, until
+    the next call to |twintree.setup()|.
+
+    The keys follow changes of tab that fire the |TabEnter| event. After a
+    change that fired none, as with `:noautocmd tabnext`:
+    - outside a diff, the first press of a key only removes the plugin's
+      mappings; the next press is handled by your mapping or by Neovim;
+    - in a diff tab the keys are missing until the next change of tab.
+    The commands work in both cases.
 
 A line of the tree shows, from left to right: an indent guide per level of
 nesting, the icon, the name, the lines added and deleted, and the status
@@ -257,8 +328,21 @@ Calling setup is optional. Defaults: >lua
       cache_dir = nil,
       -- Icons in the tree, when an icon plugin is installed.
       icons = true,
+      -- Keys bound while a diff tab is current, see |twintree-keys|.
+      -- false leaves an action without a key.
+      keys = {
+        next_file = "]<C-f>",
+        prev_file = "[<C-f>",
+      },
     })
 <
+A call with a value that cannot be used, such as an empty key or the same key
+for both actions, is reported in one line and changes nothing. A call made
+while a diff tab is current takes effect at once.
+
+After the Lua modules of the plugin are reloaded, call setup again; until
+then the default keys apply.
+
                                                                *twintree-icons*
 Icons come from `mini.icons` or `nvim-web-devicons`, whichever is installed;
 `mini.icons` is used when both are. Neither is required. Most icons and the

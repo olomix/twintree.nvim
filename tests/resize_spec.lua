@@ -623,6 +623,114 @@ describe("in a real terminal", function()
       assert.is_true(shown.after[2] >= 150)
     end)
 
+    pty_it("moves between the files with its keys and gives them back in another tab", function()
+      stop()
+      assert(launch({
+        "-c",
+        "nnoremap ]<C-f> <Cmd>let g:user_hits = get(g:, 'user_hits', 0) + 1<CR>",
+        "-c",
+        setup_arg(h.tmpdir()),
+        "-c",
+        "Twintree",
+      }))
+      dismiss_messages()
+      connect()
+      tab = lua("return vim.api.nvim_get_current_tabpage()")
+      settle_panes(function(p)
+        return p.after.file == repo .. "/0.txt" and p.after.current
+      end)
+
+      press("]<C-f>")
+      settle_panes(function(p)
+        return p.after.file == repo .. "/a.txt" and p.after.current and p.after.diff
+      end)
+      press("2]<C-f>")
+      settle_panes(function(p)
+        return p.after.file == repo .. "/long.txt"
+      end)
+      press("[<C-f>")
+      local panes = settle_panes(function(p)
+        return p.after.file == repo .. "/a.txt"
+      end)
+      assert.equals(panes.root .. "/a.txt", panes.before.file)
+      assert.equals(vim.NIL, lua("return vim.g.user_hits or vim.NIL"))
+
+      -- In a tab without a diff the key is the user's again.
+      press(":tabnew<CR>")
+      press("]<C-f>")
+      assert(vim.wait(5000, function()
+        return lua("return vim.g.user_hits or 0") == 1
+      end, 50), "the mapping of the user did not run")
+      assert.equals(repo .. "/a.txt", lua(PANES, tab).after.file)
+      assert.equals("", lua("return vim.fn.maparg('[<C-f>', 'n')"))
+
+      -- And the plugin's when the diff tab is entered again.
+      press("gt")
+      press("]<C-f>")
+      settle_panes(function(p)
+        return p.after.file == repo .. "/long.txt"
+      end)
+      assert.equals(1, lua("return vim.g.user_hits"))
+    end)
+
+    pty_it("shows the first change of the next file when the key is pressed in the tree", function()
+      stop()
+      local lines = {}
+      for i = 1, 200 do
+        lines[i] = "line " .. i
+      end
+      h.write(repo, "a.txt", table.concat(lines, "\n") .. "\n")
+      -- The commit takes the changes of the other files with it.
+      h.commit(repo, "long second file")
+      h.write(repo, "0.txt", "zero again\n")
+      lines[150] = "changed"
+      h.write(repo, "a.txt", table.concat(lines, "\n") .. "\n")
+      assert(launch({ "-c", setup_arg(h.tmpdir()), "-c", "Twintree" }))
+      dismiss_messages()
+      connect()
+      tab = lua("return vim.api.nvim_get_current_tabpage()")
+      settle_panes(function(p)
+        return p.after.file == repo .. "/0.txt" and p.after.current
+      end)
+
+      lua(
+        [[
+          local session = require("twintree.session")
+          vim.api.nvim_set_current_win(session.tree_win(session.get(...)))
+        ]],
+        tab
+      )
+      press("]<C-f>")
+      local panes = settle_panes(function(p)
+        return p.after.file == repo .. "/a.txt" and p.after.line == 150 and p.before.line == 150
+      end)
+      assert.equals("changed", panes.after.text)
+      assert.equals("line 150", panes.before.text)
+      assert.is_false(panes.after.current)
+      assert.is_false(panes.before.current)
+      local tree = tree_state()
+      assert.is_true(tree.in_tree)
+      assert.equals("a.txt", tree.selected)
+
+      local shown
+      assert(vim.wait(5000, function()
+        shown = lua(
+          [[
+            local state = require("twintree.session").get(...)
+            local function lines(win)
+              return vim.api.nvim_win_call(win, function()
+                return { vim.fn.line("w0"), vim.fn.line("w$") }
+              end)
+            end
+            return { before = lines(state.wins.before), after = lines(state.wins.after) }
+          ]],
+          tab
+        )
+        return shown.after[1] > 1 and vim.deep_equal(shown.after, shown.before)
+      end, 50), "the panes do not show the same lines: " .. vim.inspect(shown))
+      assert.is_true(shown.after[1] <= 150 and shown.after[2] >= 150)
+    end)
+
     pty_it("asks about a swap file of the first file and opens without it on Abort", function()
       stop()
       local swap_dir = h.tmpdir()

@@ -484,3 +484,68 @@ describe("tree.cut", function()
     assert.truthy(tree.cut(name, 12):match("%.txt$"))
   end)
 end)
+
+describe("tree.files", function()
+  local function entry(path)
+    return { path = path, status = "M" }
+  end
+
+  local function paths(files, only_visible)
+    local result = {}
+    for _, file in ipairs(files) do
+      if file.visible or not only_visible then
+        table.insert(result, file.entry.path)
+      end
+    end
+    return result
+  end
+
+  local entries = {
+    entry("top.txt"),
+    entry("src/b.txt"),
+    entry("src/deep/c.txt"),
+    entry("src/deep/d.txt"),
+    entry("lib/a.txt"),
+  }
+
+  it("lists the files in the order of the tree lines", function()
+    local files = tree.files(entries)
+    assert.same(
+      { "lib/a.txt", "src/deep/c.txt", "src/deep/d.txt", "src/b.txt", "top.txt" },
+      paths(files)
+    )
+    local from_lines = {}
+    for _, line in ipairs(tree.lines(entries)) do
+      if line.type == "file" then
+        table.insert(from_lines, line.entry.path)
+      end
+    end
+    assert.same(from_lines, paths(files))
+    assert.same(paths(files), paths(files, true))
+    assert.equals(entries[1], files[5].entry)
+  end)
+
+  it("flags the files of a collapsed directory as not visible", function()
+    local files = tree.files(entries, { src = true })
+    assert.equals(5, #files)
+    assert.same({ "lib/a.txt", "top.txt" }, paths(files, true))
+  end)
+
+  it("flags the files of a collapsed directory inside an expanded one", function()
+    local files = tree.files(entries, { ["src/deep"] = true })
+    assert.same({ "lib/a.txt", "src/b.txt", "top.txt" }, paths(files, true))
+  end)
+
+  it("uses the path of a chain of single directories", function()
+    local chained = { entry("one/two/x.txt"), entry("y.txt") }
+    assert.same({ "y.txt" }, paths(tree.files(chained, { ["one/two"] = true }), true))
+    assert.same(
+      { "one/two/x.txt", "y.txt" },
+      paths(tree.files(chained, { one = true }), true)
+    )
+  end)
+
+  it("is empty without entries", function()
+    assert.same({}, tree.files({}))
+  end)
+end)

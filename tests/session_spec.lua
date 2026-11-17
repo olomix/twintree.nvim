@@ -879,6 +879,21 @@ describe("session", function()
       assert.equals(repo .. "/a.txt", name(state.wins.after))
       assert.is_true(vim.wo[state.wins.before].diff)
       assert.truthy(vim.tbl_contains(tree_lines(state), "a.txt +1 -1 M"))
+
+      -- The keys set before the reload run the reloaded code.
+      local function mappings(lhs)
+        return vim.tbl_filter(function(mapping)
+          return vim.keycode(mapping.lhs) == vim.keycode(lhs)
+        end, api.nvim_get_keymap("n"))
+      end
+      assert.equals(1, #mappings("]<C-f>"))
+      assert.equals("Twintree: next changed file", mappings("]<C-f>")[1].desc)
+      h.keys("]<C-f>")
+      assert.equals("gone.txt", require("twintree.session").get().selected)
+      vim.cmd.tabnew()
+      assert.equals(0, #mappings("]<C-f>"))
+      assert.equals(0, #mappings("[<C-f>"))
+      vim.cmd.tabclose()
     end)
 
     -- Later tests hold references to the original modules.

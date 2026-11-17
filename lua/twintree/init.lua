@@ -2,10 +2,16 @@ local config = require("twintree.config")
 
 local M = {}
 
----Configure the plugin. Optional; safe to call more than once.
+---Configure the plugin. Optional; safe to call more than once. A call
+---with a value that cannot be used is reported and changes nothing.
 ---@param opts? twintree.Config
 function M.setup(opts)
-  config.setup(opts)
+  local ok, err = config.setup(opts)
+  if not ok then
+    vim.notify("twintree: " .. err, vim.log.levels.ERROR)
+    return
+  end
+  require("twintree.keys").reconfigure()
 end
 
 ---Open a diff session for the repository of the current directory.
@@ -73,6 +79,8 @@ function M.open(revs)
   end
 
   local tab = session.create(repo, before, after, treeview.create_buf())
+  -- No TabEnter fires for a diff that opens in the tab Neovim started with.
+  require("twintree.keys").sync()
   treeview.set_entries(tab, entries)
 
   local first = treeview.first_file(tab)

@@ -65,6 +65,27 @@ In the tree:
 | `<CR>` | Show the file in both panes, or fold a directory |
 | `R` | Refresh the list of changed files |
 
+Anywhere in the diff tab:
+
+| Key or command | Action |
+|---|---|
+| `]<C-f>`, `:TwintreeNextFile` | Show the next changed file |
+| `[<C-f>`, `:TwintreePrevFile` | Show the previous changed file |
+| `:TwintreeFirstFile` | Show the first changed file |
+| `:TwintreeLastFile` | Show the last changed file |
+
+The files come in the order of the tree, and files inside a folded
+directory are skipped. Next and previous take a count (`3]<C-f>`). At the
+first and last file they stop and say "no more changed files"; they do not
+start over. The window you are in stays the current one, so you can step
+through the files from the tree as well. After a jump into a file that did
+not change, next and previous continue from the changed file you looked at
+last.
+
+The two keys exist only while a diff tab is the current tab, in normal
+mode. In every other tab a mapping of your own on those keys is back in
+place. See [Keys](#keys) to change them.
+
 A line of the tree shows the file's icon, its name, the lines added and
 deleted, and its status at the right edge:
 
@@ -188,8 +209,47 @@ require("twintree").setup({
   cache_dir = nil,
   -- Icons in the tree, when an icon plugin is installed.
   icons = true,
+  -- Keys bound while a diff tab is current; false leaves an action
+  -- without a key.
+  keys = {
+    next_file = "]<C-f>",
+    prev_file = "[<C-f>",
+  },
 })
 ```
+
+### Keys
+
+The first and last file have no key by default. Map the commands yourself,
+for example:
+
+```lua
+vim.keymap.set("n", "]<C-g>", "<Cmd>TwintreeLastFile<CR>")
+vim.keymap.set("n", "[<C-g>", "<Cmd>TwintreeFirstFile<CR>")
+```
+
+`]<C-S-f>` and `[<C-S-f>` look like the natural choice, but they only work
+in a terminal that tells Ctrl+Shift+F from Ctrl+F (kitty keyboard protocol,
+or tmux with `extended-keys`). Elsewhere Neovim receives `]<C-f>`, and the
+key shows the next file instead of the last.
+
+What to know about the keys of the plugin:
+
+* Only global normal-mode mappings are touched. A mapping you made with
+  `:map` keeps working in every mode; afterwards `:map` lists it as two
+  entries, one for normal mode and one for the other modes.
+* A buffer-local mapping on the same key, from you or another plugin, wins
+  in that buffer. Choose other keys if that gets in the way.
+* When you map or unmap one of the keys while a diff tab is current, the
+  plugin leaves that key alone until the next call to `setup()`.
+* The keys follow changes of tab that fire Neovim's tab events. After a
+  change without events (`:noautocmd tabnext`), the first press of a key
+  outside a diff only removes the plugin's mapping, and in a diff tab the
+  keys are missing until the next change of tab. The commands always work.
+* After the plugin's Lua modules are reloaded, call `setup()` again;
+  until then the default keys apply.
+* A value `setup()` cannot use (an empty key, the same key for both
+  actions) is reported, and that call changes nothing.
 
 ## Worktrees
 

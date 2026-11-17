@@ -167,17 +167,24 @@ function M.set_entries(tab, entries)
   M.draw(tab)
 end
 
+---The changed files of a session in the order of its tree.
+---@param tab integer
+---@return { entry: twintree.Entry, visible: boolean }[]
+function M.files(tab)
+  local state = session.get(tab)
+  if not state or not vim.api.nvim_buf_is_valid(state.tree_buf) then
+    return {}
+  end
+  return tree.files(entries_of(state.tree_buf), state.collapsed)
+end
+
 ---The file on the first file line of the tree.
 ---@param tab integer
 ---@return twintree.Entry?
 function M.first_file(tab)
-  local state = session.get(tab)
-  if not state then
-    return nil
-  end
-  for _, line in ipairs(lines_of(state)) do
-    if line.type == "file" then
-      return line.entry
+  for _, file in ipairs(M.files(tab)) do
+    if file.visible then
+      return file.entry
     end
   end
 end
@@ -224,6 +231,7 @@ function M.refresh()
   vim.b[state.tree_buf].twintree_entries = entries
   -- The panes keep their files; only the mark depends on the new list.
   state.selected = state.pair and session.entry_path(state, state.pair)
+  state.last_entry = state.selected or state.last_entry
   session.save(tab, state)
   M.draw(tab)
 end

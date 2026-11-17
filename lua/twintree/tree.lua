@@ -357,6 +357,27 @@ local function dir_line(node, depth, is_collapsed, status, opts)
   }
 end
 
+---The changed files in the order the tree lists them.
+---@param entries twintree.Entry[]
+---@param collapsed? table<string, boolean> directory paths that are folded
+---@return { entry: twintree.Entry, visible: boolean }[] visible is false
+---  for a file inside a folded directory
+function M.files(entries, collapsed)
+  collapsed = collapsed or {}
+  local files = {}
+  local function walk(node, visible)
+    for _, child in ipairs(node.children) do
+      if child.type == "dir" then
+        walk(child, visible and collapsed[child.path] ~= true)
+      else
+        table.insert(files, { entry = child.entry, visible = visible })
+      end
+    end
+  end
+  walk(M.build(entries), true)
+  return files
+end
+
 ---Flatten the tree into display lines.
 ---@param entries twintree.Entry[]
 ---@param opts? twintree.LineOpts
