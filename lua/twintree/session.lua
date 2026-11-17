@@ -16,6 +16,8 @@ local M = {}
 ---@field wins { tree: integer, before: integer, after: integer }
 ---@field tree_buf integer
 ---@field selected? string path of the tree entry the panes compare
+---@field last_entry? string path of the last tree entry the panes
+---  compared; kept while they show a file that is not in the tree
 ---@field pair? twintree.Pair files the panes compare
 ---@field bufs? { before: integer, after: integer } buffers of that pair
 ---@field declined? { before?: integer, after?: integer } buffer a pane was
@@ -528,6 +530,9 @@ local function show_pair(tab, pair, opts)
     end
   end
   state.declined = nil
+  -- Not before the files are open: a declined file is not a position.
+  -- The previous selection stands in for a session that has no last entry.
+  state.last_entry = state.selected or state.last_entry or previous.selected
   for _, pane in ipairs(PANES) do
     if pair[pane] then
       state.viewed[tostring(state.bufs[pane])] = true
@@ -544,9 +549,11 @@ local function show_pair(tab, pair, opts)
   -- Required here, not at the top: the tree view requires this module.
   local treeview = require("twintree.treeview")
   treeview.draw(tab)
-  local tree_win = M.tree_win(state)
-  if tree_win then
-    treeview.focus_selected(tab, tree_win)
+  -- Every window that shows the tree, also one the user made for it.
+  for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+    if vim.api.nvim_win_get_buf(win) == state.tree_buf then
+      treeview.focus_selected(tab, win)
+    end
   end
   return true
 end
@@ -600,9 +607,11 @@ end
 ---one it has shown keeps the position it was left on.
 ---@param tab integer
 ---@param entry twintree.Entry
+---@param opts? { keep_focus?: boolean } leave the current window current
+---  instead of going to the after pane
 ---@return boolean ok
 ---@return string? err
-function M.show(tab, entry)
+function M.show(tab, entry, opts)
   local state = M.get(tab)
   if not state then
     return false, M.NO_SESSION
@@ -620,7 +629,8 @@ function M.show(tab, entry)
   if pair[pane] and not viewed[tostring(state.bufs[pane])] then
     goto_first_change(state.wins[pane])
   end
-  if vim.api.nvim_win_is_valid(state.wins.after) then
+  local keep_focus = opts and opts.keep_focus
+  if not keep_focus and vim.api.nvim_win_is_valid(state.wins.after) then
     vim.api.nvim_set_current_win(state.wins.after)
   end
   return true

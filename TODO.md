@@ -3,11 +3,10 @@
 - Make git calls async and show a progress bar or spinner while work is in
   progress. Decide what to do when a conflicting command is issued while the
   previous one is still running.
-- Fast jump to the next/previous changed file (`]f`/`[f`, if they do not
-  conflict with other keys).
-- Default key mappings for `:TwintreeToggleTree` and `:TwintreeResetLayout`,
-  and where such keys should live so they work in the panes without leaking
-  into other tabs.
+- Default key mappings for `:TwintreeToggleTree` and `:TwintreeResetLayout`.
+  Keys bound only while a diff tab is current exist now (`keys` option,
+  `lua/twintree/keys.lua`); new keys can be added as further actions
+  there.
 - Open the file diff on mouse click in the tree.
 - Work out how to end a diff that occupies the only tab (`nvim +Twintree`):
   `:tabclose` refuses to close the last tab, so today the only way is to
@@ -95,3 +94,13 @@
     closes; say so wherever "other tabs are not changed" is promised.
   - Tests can use real autocommands: `BufReadPost` can close the other
     pane, the pane being loaded, or the current tab.
+- Neovim 0.11 compatibility. The README names 0.11 as the oldest
+  supported version. With a 0.11.7 release the whole suite passes except
+  one spec in `tests/resize_spec.lua`: "asks about a swap file of the
+  first file and opens without it on Abort" (started with `+Twintree`, in
+  a real terminal). It failed there before the changed-file navigation
+  was added, so it is about the swap file prompt at startup, not about
+  the keys. Find out whether the prompt itself behaves differently on
+  0.11 (a real problem for users) or only the timing of the spec does,
+  then fix the plugin or the spec. Until the CI item above exists, run
+  the suite by hand with a 0.11 `nvim` first on `PATH`.

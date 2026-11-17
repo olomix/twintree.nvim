@@ -777,6 +777,135 @@ describe("layout", function()
     assert.equals("a.txt", state().selected)
   end)
 
+  describe("moving between changed files", function()
+    local INFO, ERROR = vim.log.levels.INFO, vim.log.levels.ERROR
+
+    local function shown()
+      local path = api.nvim_buf_get_name(api.nvim_win_get_buf(state().wins.after))
+      return path:sub(#repo + 2)
+    end
+
+    local function entry(path)
+      for _, file in ipairs(require("twintree.treeview").files(tab)) do
+        if file.entry.path == path then
+          return file.entry
+        end
+      end
+      error("not a changed file: " .. path)
+    end
+
+    ---Close the tree window and show the tree in a window of the user.
+    local function own_tree_window()
+      local s = state()
+      api.nvim_win_close(assert(session.tree_win(s)), false)
+      vim.cmd("botright split")
+      api.nvim_win_set_buf(0, s.tree_buf)
+      return api.nvim_get_current_win()
+    end
+
+    ---Put another buffer into the tree window, with the cursor on line 3.
+    local function replace_tree()
+      local win = tree()
+      local other = api.nvim_create_buf(false, true)
+      api.nvim_buf_set_lines(other, 0, -1, false, { "one", "two", "three", "four" })
+      vim.wo[win].winfixbuf = false
+      api.nvim_win_set_buf(win, other)
+      api.nvim_win_set_cursor(win, { 3, 0 })
+      return win, other
+    end
+
+    before_each(function()
+      -- The diff opened with src/b.txt, the first file of the tree.
+      assert.equals("src/b.txt", shown())
+      assert.equals(INFO, vim.log.levels.INFO)
+    end)
+
+    it("moves the cursor of a tree window the user made on a selection", function()
+      local win = own_tree_window()
+      api.nvim_set_current_win(state().wins.after)
+      assert(session.show(tab, entry("a.txt")))
+      local row = api.nvim_win_get_cursor(win)[1]
+      assert.equals("a.txt +1 -1 M", h.tree_lines(state().tree_buf)[row])
+    end)
+
+    it("leaves a tree window that shows another buffer alone on a selection", function()
+      local win, other = replace_tree()
+      api.nvim_set_current_win(state().wins.after)
+      local ok, err = pcall(session.show, tab, entry("a.txt"))
+      assert.is_true(ok, tostring(err))
+      assert.equals("a.txt", shown())
+      assert.equals(other, api.nvim_win_get_buf(win))
+      assert.same({ 3, 0 }, api.nvim_win_get_cursor(win))
+    end)
+
+    it("reports a missing pane for every command and keeps the position", function()
+      api.nvim_win_close(state().wins.before, true)
+      local position = state().last_entry
+      assert.equals("src/b.txt", position)
+      local messages, restore = capture_notify()
+      local ok, err = pcall(function()
+        for _, command in ipairs({ "NextFile", "PrevFile", "FirstFile", "LastFile" }) do
+          vim.cmd("Twintree" .. command)
+        end
+      end)
+      restore()
+      assert.is_true(ok, tostring(err))
+      -- Previous has no file to go to; the other three need the pane.
+      assert.same({
+        { msg = "twintree: " .. session.BROKEN_LAYOUT, level = ERROR },
+        { msg = "twintree: no more changed files", level = INFO },
+        { msg = "twintree: " .. session.BROKEN_LAYOUT, level = ERROR },
+        { msg = "twintree: " .. session.BROKEN_LAYOUT, level = ERROR },
+      }, messages)
+      assert.equals(position, state().last_entry)
+      assert.equals("src/b.txt", state().selected)
+    end)
+
+    it("works with the tree hidden and leaves it hidden", function()
+      assert(twintree.toggle_tree())
+      assert.is_nil(session.tree_win(state()))
+      vim.cmd("TwintreeNextFile")
+      assert.equals("a.txt", shown())
+      assert.is_nil(session.tree_win(state()))
+      assert.equals(2, #session.layout_wins(tab))
+    end)
+
+    it("works after the tree buffer was deleted", function()
+      local old = state().tree_buf
+      vim.cmd.bdelete(old)
+      local messages, restore = capture_notify()
+      local ok, err = pcall(vim.cmd, "TwintreeNextFile")
+      restore()
+      assert.is_true(ok, tostring(err))
+      assert.same({}, messages)
+      assert.equals("a.txt", shown())
+      assert.are_not.equal(old, state().tree_buf)
+    end)
+
+    it("moves the cursor of a tree window the user made when run there", function()
+      local win = own_tree_window()
+      vim.cmd("TwintreeNextFile")
+      assert.equals("a.txt", shown())
+      assert.equals(win, api.nvim_get_current_win())
+      local row = api.nvim_win_get_cursor(win)[1]
+      assert.equals("a.txt +1 -1 M", h.tree_lines(state().tree_buf)[row])
+    end)
+
+    it("leaves a tree window that shows another buffer alone", function()
+      local win, other = replace_tree()
+      api.nvim_set_current_win(win)
+      local messages, restore = capture_notify()
+      local ok, err = pcall(vim.cmd, "TwintreeNextFile")
+      restore()
+      assert.is_true(ok, tostring(err))
+      assert.same({}, messages)
+      assert.equals("a.txt", shown())
+      assert.equals(win, api.nvim_get_current_win())
+      assert.equals(other, api.nvim_win_get_buf(win))
+      assert.same({ 3, 0 }, api.nvim_win_get_cursor(win))
+    end)
+  end)
+
   describe("cursor on the first change", function()
     before_each(function()
       vim.cmd.tabclose({ bang = true, mods = { emsg_silent = true } })

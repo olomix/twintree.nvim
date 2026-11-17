@@ -107,8 +107,10 @@ the panes compared. It is written in three places:
   not nil. A declined file therefore never becomes the position, and a
   jump to a file outside the list does not erase it.
 - `treeview.refresh`, when it computes a non-nil `selected`.
-- `session.get`, which fills it from `selected` for a session saved
-  before the field existed.
+- For a session saved before the field existed, `show_pair` falls back to
+  the selection it replaces. Found during implementation: filling the
+  field in `session.get` would also run while a file is being opened,
+  when `selected` already names a file that may still be declined.
 
 Navigation is relative to the first of `selected` and `last_entry` that
 is among the entries. `selected` can be stale: rebuilding a deleted tree
