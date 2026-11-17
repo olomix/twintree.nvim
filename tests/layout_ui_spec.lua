@@ -777,6 +777,62 @@ describe("layout", function()
     assert.equals("a.txt", state().selected)
   end)
 
+  describe("cursor on the first change", function()
+    before_each(function()
+      vim.cmd.tabclose({ bang = true, mods = { emsg_silent = true } })
+      h.reset()
+      local lines = {}
+      for i = 1, 100 do
+        lines[i] = "line " .. i
+      end
+      h.write(repo, "far.txt", table.concat(lines, "\n") .. "\n")
+      h.commit(repo, "far")
+      lines[60] = "changed"
+      h.write(repo, "far.txt", table.concat(lines, "\n") .. "\n")
+      tab = assert(twintree.open())
+    end)
+
+    it("waits for a file that was selected while a pane was missing", function()
+      local known = vim.tbl_count(state().viewed)
+      api.nvim_win_close(state().wins.before, true)
+      local messages, restore = capture_notify()
+      local ok, err = pcall(select, "far.txt")
+      restore()
+      assert.is_true(ok, tostring(err))
+      assert.equals(1, #messages)
+      assert.equals("twintree: " .. session.BROKEN_LAYOUT, messages[1].msg)
+      assert.equals(known, vim.tbl_count(state().viewed))
+
+      assert.is_true(twintree.reset_layout())
+      select("far.txt")
+      local s = state()
+      assert.equals("far.txt", s.selected)
+      assert.equals(s.wins.after, api.nvim_get_current_win())
+      assert.equals(60, api.nvim_win_get_cursor(s.wins.after)[1])
+      assert.equals(60, api.nvim_win_get_cursor(s.wins.before)[1])
+    end)
+
+    it("raises no error when the pane is closed while the file is shown", function()
+      -- Stands in for an autocommand of the user that closes the pane
+      -- after both files were loaded.
+      local treeview = require("twintree.treeview")
+      local draw = treeview.draw
+      treeview.draw = function(...)
+        treeview.draw = draw
+        api.nvim_win_close(state().wins.after, true)
+        return draw(...)
+      end
+      local messages, restore = capture_notify()
+      local ok, err = pcall(select, "far.txt")
+      treeview.draw = draw
+      restore()
+      assert.is_true(ok, tostring(err))
+      assert.same({}, messages)
+      assert.is_false(api.nvim_win_is_valid(state().wins.after))
+      assert.equals("far.txt", state().selected)
+    end)
+  end)
+
   it("keeps one set of autocommands after the plugin file is sourced again", function()
     local before = #api.nvim_get_autocmds({ group = "twintree" })
     vim.cmd.runtime("plugin/twintree.lua")

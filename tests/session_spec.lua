@@ -502,13 +502,13 @@ describe("session", function()
       api.nvim_set_current_win(before)
       vim.cmd.edit(state.before.root .. "/gone.txt")
       assert.is_true(vim.wo[before].diff)
-      assert.is_true(vim.wo[before].scrollbind)
       assert.is_false(vim.bo.modifiable)
       assert.equals("twintree://empty", name(state.wins.after))
       assert.is_true(vim.wo[state.wins.after].diff)
 
       vim.cmd.buffer(first_buf)
       assert.is_true(vim.wo[before].diff)
+      assert.is_true(vim.wo[before].scrollbind)
       assert.equals(repo .. "/a.txt", name(state.wins.after))
     end)
 
@@ -523,6 +523,279 @@ describe("session", function()
         messages[1].msg
       )
       assert.equals(vim.log.levels.ERROR, messages[1].level)
+    end)
+  end)
+
+  describe("cursor", function()
+    local dir, state
+
+    ---`count` numbered lines as file text, after `edit` changed the list.
+    local function text(count, edit)
+      local lines = {}
+      for i = 1, count do
+        lines[i] = "line " .. i
+      end
+      if edit then
+        edit(lines)
+      end
+      return table.concat(lines, "\n") .. "\n"
+    end
+
+    local function view(win)
+      return api.nvim_win_call(win, vim.fn.winsaveview)
+    end
+
+    local function line(win)
+      return api.nvim_win_get_cursor(win)[1]
+    end
+
+    local function current_line(win)
+      return api.nvim_win_call(win, api.nvim_get_current_line)
+    end
+
+    ---Move the cursor of the after pane as the user would.
+    local function move(lnum)
+      api.nvim_set_current_win(state.wins.after)
+      h.keys(lnum .. "G")
+    end
+
+    before_each(function()
+      h.reset()
+      local files = { "far", "removed", "top", "above", "below", "same", "gone" }
+      local initial = { ["0.txt"] = "zero\n", ["other.txt"] = "other\n" }
+      for _, file in ipairs(files) do
+        initial[file .. ".txt"] = text(100)
+      end
+      dir = h.repo(initial)
+      h.write(dir, "0.txt", "ZERO\n")
+      h.write(dir, "other.txt", "OTHER\n")
+      h.write(dir, "far.txt", text(100, function(lines)
+        lines[60] = "changed"
+        lines[90] = "changed again"
+      end))
+      h.write(dir, "removed.txt", text(100, function(lines)
+        lines[80] = "changed"
+        for _ = 1, 3 do
+          table.remove(lines, 40)
+        end
+      end))
+      h.write(dir, "top.txt", text(100, function(lines)
+        lines[1] = "changed"
+        lines[50] = "changed again"
+      end))
+      h.write(dir, "above.txt", text(100, function(lines)
+        lines[50] = "changed"
+        table.insert(lines, 1, "added")
+      end))
+      h.write(dir, "below.txt", text(100, function(lines)
+        lines[50] = "changed"
+        table.remove(lines, 1)
+      end))
+      h.write(dir, "new.txt", text(100))
+      vim.fn.delete(dir .. "/gone.txt")
+      vim.fn.setfperm(dir .. "/same.txt", "rwxr-xr-x")
+      api.nvim_set_current_dir(dir)
+      state = session.get(assert(twintree.open()))
+    end)
+
+    it("is on the first change of the file a session opens with", function()
+      h.reset()
+      h.write(dir, "0.txt", "ZERO\n")
+      h.commit(dir, "all")
+      h.write(dir, "far.txt", text(100, function(lines)
+        lines[70] = "later"
+      end))
+      state = session.get(assert(twintree.open()))
+      assert.equals(dir .. "/far.txt", name(state.wins.after))
+      assert.equals(state.wins.after, api.nvim_get_current_win())
+      assert.equals(60, line(state.wins.after))
+      assert.equals(60, line(state.wins.before))
+    end)
+
+    it("is on the first change of a selected file, in both panes", function()
+      state = select(state, "far.txt")
+      assert.equals(state.wins.after, api.nvim_get_current_win())
+      assert.equals(60, line(state.wins.after))
+      assert.equals("changed", current_line(state.wins.after))
+      assert.equals(60, line(state.wins.before))
+      assert.equals("line 60", current_line(state.wins.before))
+
+      local after, before = view(state.wins.after), view(state.wins.before)
+      assert.is_true(after.topline > 1)
+      assert.equals(after.topline, before.topline)
+      local height = api.nvim_win_get_height(state.wins.after)
+      assert.is_true(after.topline + height > 60)
+    end)
+
+    it("is next to the gap when the first change removes lines", function()
+      state = select(state, "removed.txt")
+      assert.equals(40, line(state.wins.after))
+      assert.equals("line 43", current_line(state.wins.after))
+      -- The before pane is on the same text, right below the removed lines.
+      assert.equals("line 43", current_line(state.wins.before))
+      local before = view(state.wins.before)
+      assert.is_true(before.topline <= 40)
+      assert.is_true(before.topline + api.nvim_win_get_height(state.wins.before) > 43)
+    end)
+
+    it("stays on a first line that is changed", function()
+      state = select(state, "top.txt")
+      assert.equals(1, line(state.wins.after))
+    end)
+
+    it("stays on the first line when lines were added above it", function()
+      state = select(state, "above.txt")
+      assert.equals(1, line(state.wins.after))
+      assert.equals("added", current_line(state.wins.after))
+    end)
+
+    it("stays on the first line when lines were removed above it", function()
+      state = select(state, "below.txt")
+      assert.equals(1, line(state.wins.after))
+      assert.equals("line 2", current_line(state.wins.after))
+    end)
+
+    it("stays at the top of a file with the same content on both sides", function()
+      local messages, restore = capture_notify()
+      state = select(state, "same.txt")
+      restore()
+      assert.same({}, messages)
+      assert.equals("same.txt", state.selected)
+      assert.equals(1, line(state.wins.after))
+      assert.equals(1, line(state.wins.before))
+    end)
+
+    it("stays at the top of an added and of a deleted file", function()
+      state = select(state, "new.txt")
+      assert.equals(1, line(state.wins.after))
+      state = select(state, "gone.txt")
+      assert.equals(state.wins.after, api.nvim_get_current_win())
+      -- Any command: Neovim scrolls bound windows when a command ends.
+      h.keys("0")
+      assert.equals(1, line(state.wins.before))
+      assert.equals(1, view(state.wins.before).topline)
+      assert.is_true(vim.wo[state.wins.before].diff)
+
+      -- A pair with both sides scrolls together again.
+      state = select(state, "far.txt")
+      assert.is_true(vim.wo[state.wins.before].scrollbind)
+      assert.is_true(vim.wo[state.wins.after].scrollbind)
+    end)
+
+    it("adds no entry to the jump list", function()
+      state = select(state, "far.txt")
+      local jumps = api.nvim_win_call(state.wins.after, function()
+        return vim.fn.getjumplist()[1]
+      end)
+      local far = state.bufs.after
+      for _, jump in ipairs(jumps) do
+        assert.is_false(jump.bufnr == far and jump.lnum == 1, vim.inspect(jump))
+      end
+      h.keys("<C-o>")
+      local win = state.wins.after
+      assert.is_false(api.nvim_win_get_buf(win) == far and line(win) == 1)
+    end)
+
+    it("ignores a mapping of ]c", function()
+      vim.keymap.set("n", "]c", "G")
+      local ok, err = pcall(function()
+        state = select(state, "far.txt")
+        assert.equals(60, line(state.wins.after))
+      end)
+      vim.keymap.del("n", "]c")
+      assert(ok, err)
+    end)
+
+    it("leaves the cursor of a window in another tab alone", function()
+      h.reset()
+      vim.cmd.edit(dir .. "/far.txt")
+      local elsewhere = api.nvim_get_current_win()
+      api.nvim_win_set_cursor(elsewhere, { 5, 0 })
+      state = session.get(assert(twintree.open()))
+      assert.equals(2, #api.nvim_list_tabpages())
+
+      state = select(state, "far.txt")
+      assert.equals(60, line(state.wins.after))
+      assert.equals(5, line(elsewhere))
+    end)
+
+    describe("of a file shown again", function()
+      it("is where it was left", function()
+        state = select(state, "far.txt")
+        move(75)
+        state = select(state, "other.txt")
+        state = select(state, "far.txt")
+        assert.equals(75, line(state.wins.after))
+        assert.equals(75, line(state.wins.before))
+        assert.equals(state.wins.after, api.nvim_get_current_win())
+      end)
+
+      it("does not move when the file is already shown", function()
+        state = select(state, "far.txt")
+        move(75)
+        state = select(state, "far.txt")
+        assert.equals(75, line(state.wins.after))
+        assert.equals(state.wins.after, api.nvim_get_current_win())
+      end)
+
+      it("is on the first change again after the buffer was wiped out", function()
+        state = select(state, "far.txt")
+        move(75)
+        local far = state.bufs.after
+        state = select(state, "other.txt")
+        vim.cmd.bwipeout(far)
+        state = select(state, "far.txt")
+        assert.are_not.equal(far, state.bufs.after)
+        assert.equals(60, line(state.wins.after))
+      end)
+
+      it("is on the first change in another diff tab", function()
+        state = select(state, "far.txt")
+        move(75)
+        local second = session.get(assert(twintree.open()))
+        second = select(second, "far.txt")
+        assert.equals(60, line(second.wins.after))
+        assert.equals(75, line(state.wins.after))
+      end)
+    end)
+
+    describe("record of shown files", function()
+      local function count()
+        return vim.tbl_count(session.get().viewed)
+      end
+
+      it("holds the buffers of both panes", function()
+        state = select(state, "far.txt")
+        assert.is_true(state.viewed[tostring(state.bufs.before)])
+        assert.is_true(state.viewed[tostring(state.bufs.after)])
+      end)
+
+      it("holds no placeholder", function()
+        local known = count()
+        state = select(state, "gone.txt")
+        assert.is_true(state.viewed[tostring(state.bufs.before)])
+        assert.is_nil(state.viewed[tostring(state.bufs.after)])
+        assert.equals(known + 1, count())
+      end)
+
+      it("is not changed by a file that was not shown", function()
+        local known = count()
+        api.nvim_win_close(state.wins.before, true)
+        local messages, restore = capture_notify()
+        select(state, "far.txt")
+        restore()
+        assert.equals(1, #messages)
+        assert.equals(known, count())
+      end)
+
+      it("is filled in for a session that has none", function()
+        state.viewed = nil
+        session.save(api.nvim_get_current_tabpage(), state)
+        assert.same({}, session.get().viewed)
+        state = select(state, "far.txt")
+        assert.equals(60, line(state.wins.after))
+        assert.is_true(state.viewed[tostring(state.bufs.after)])
+      end)
     end)
   end)
 

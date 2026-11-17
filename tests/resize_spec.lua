@@ -585,6 +585,44 @@ describe("in a real terminal", function()
       end, "layout after starting with +Twintree")
     end)
 
+    pty_it("shows the first change of the first file on screen", function()
+      stop()
+      local lines = {}
+      for i = 1, 200 do
+        lines[i] = "line " .. i
+      end
+      h.write(repo, "0.txt", table.concat(lines, "\n") .. "\n")
+      h.commit(repo, "long first file")
+      lines[150] = "changed"
+      h.write(repo, "0.txt", table.concat(lines, "\n") .. "\n")
+      assert(launch({ "-c", setup_arg(h.tmpdir()), "-c", "Twintree" }))
+      dismiss_messages()
+      connect()
+      tab = lua("return vim.api.nvim_get_current_tabpage()")
+
+      local panes = settle_panes(function(p)
+        return p.after.file == repo .. "/0.txt" and p.after.current and p.before.line == 150
+      end)
+      assert.equals(150, panes.after.line)
+      assert.equals("changed", panes.after.text)
+      assert.equals("line 150", panes.before.text)
+      local shown = lua(
+        [[
+          local state = require("twintree.session").get(...)
+          local function lines(win)
+            return vim.api.nvim_win_call(win, function()
+              return { vim.fn.line("w0"), vim.fn.line("w$") }
+            end)
+          end
+          return { before = lines(state.wins.before), after = lines(state.wins.after) }
+        ]],
+        tab
+      )
+      assert.same(shown.after, shown.before)
+      assert.is_true(shown.after[1] > 1 and shown.after[1] <= 150)
+      assert.is_true(shown.after[2] >= 150)
+    end)
+
     pty_it("asks about a swap file of the first file and opens without it on Abort", function()
       stop()
       local swap_dir = h.tmpdir()

@@ -21,6 +21,8 @@ local M = {}
 ---@field declined? { before?: integer, after?: integer } buffer a pane was
 ---  taken to whose counterpart was not opened; not followed again while the
 ---  pane shows it
+---@field viewed table<string, boolean> numbers of the file buffers the
+---  panes have shown, as strings: a tab variable has no integer keys
 ---@field collapsed table<string, boolean>
 ---@field layout twintree.Layout
 
@@ -69,6 +71,8 @@ function M.get(tab)
     return nil
   end
   state.collapsed = state.collapsed or {}
+  -- Sessions opened by an older version of the plugin have none.
+  state.viewed = state.viewed or {}
   -- Sessions opened by an older version of the plugin have no layout.
   state.layout = state.layout or M.default_layout()
   -- Nor do they have a pair.
@@ -224,6 +228,7 @@ function M.create(repo, before, after, tree_buf)
     after = after,
     wins = { tree = tree_win, before = before_win, after = after_win },
     tree_buf = tree_buf,
+    viewed = {},
     collapsed = {},
     layout = M.default_layout(),
   })
@@ -234,7 +239,10 @@ function M.create(repo, before, after, tree_buf)
   return tab
 end
 
-local function set_diff(win, enable)
+---@param win integer
+---@param enable boolean
+---@param pair? twintree.Pair files the panes compare, when enabling
+local function set_diff(win, enable, pair)
   if vim.wo[win].diff == enable then
     return
   end
@@ -243,6 +251,11 @@ local function set_diff(win, enable)
     if enable then
       -- Diff mode folds unchanged lines; both sides must stay fully readable.
       vim.wo.foldenable = false
+      -- The placeholder has nothing to scroll with: bound to it, the
+      -- file in the other pane is scrolled to its end.
+      if pair and not (pair.before and pair.after) then
+        vim.wo.scrollbind = false
+      end
     end
   end)
 end
@@ -467,7 +480,8 @@ local function undo_pair(tab, state, previous, changed)
     local win = state.wins[pane]
     if vim.api.nvim_win_is_valid(win) then
       local recorded = state.bufs and state.bufs[pane]
-      set_diff(win, recorded ~= nil and vim.api.nvim_win_get_buf(win) == recorded)
+      local enable = recorded ~= nil and vim.api.nvim_win_get_buf(win) == recorded
+      set_diff(win, enable, state.pair)
     end
   end
   require("twintree.treeview").draw(tab)
@@ -514,12 +528,17 @@ local function show_pair(tab, pair, opts)
     end
   end
   state.declined = nil
+  for _, pane in ipairs(PANES) do
+    if pair[pane] then
+      state.viewed[tostring(state.bufs[pane])] = true
+    end
+  end
   M.save(tab, state)
   for _, pane in ipairs(PANES) do
     leave_diff(tab, replaced[pane] or state.bufs[pane])
   end
   for _, pane in ipairs(PANES) do
-    set_diff(state.wins[pane], true)
+    set_diff(state.wins[pane], true, pair)
   end
 
   -- Required here, not at the top: the tree view requires this module.
@@ -556,7 +575,27 @@ function M.show_pair(tab, pair, opts)
   return ok, err
 end
 
----Show a changed file in both panes, diffed against each other.
+---Put the cursor of a diff window on the first change of its file. The
+---other diff window follows, because the two are bound.
+---@param win integer
+local function goto_first_change(win)
+  -- Loading the buffers runs autocommands of the user, which can close it.
+  if not vim.api.nvim_win_is_valid(win) then
+    return
+  end
+  -- A jump that fails leaves the cursor at the top; the file is shown.
+  pcall(vim.api.nvim_win_call, win, function()
+    vim.cmd("keepjumps normal! gg")
+    -- `]c` skips a change that starts on the first line.
+    if vim.fn.diff_hlID(1, 1) == 0 and vim.fn.diff_filler(1) == 0 then
+      vim.cmd("keepjumps normal! ]c")
+    end
+  end)
+end
+
+---Show a changed file in both panes, diffed against each other. A file
+---the session has not shown before gets the cursor on its first change;
+---one it has shown keeps the position it was left on.
 ---@param tab integer
 ---@param entry twintree.Entry
 ---@return boolean ok
@@ -566,11 +605,22 @@ function M.show(tab, entry)
   if not state then
     return false, M.NO_SESSION
   end
-  local ok, err = M.show_pair(tab, M.entry_pair(state, entry))
+  local viewed = state.viewed
+  local pair = M.entry_pair(state, entry)
+  local ok, err = M.show_pair(tab, pair)
   if not ok then
     return false, err
   end
-  vim.api.nvim_set_current_win(state.wins.after)
+  state = assert(M.get(tab))
+  -- One jump only: a second one in the other pane would drag this one
+  -- past a block of lines that exists on one side.
+  local pane = pair.after and "after" or "before"
+  if pair[pane] and not viewed[tostring(state.bufs[pane])] then
+    goto_first_change(state.wins[pane])
+  end
+  if vim.api.nvim_win_is_valid(state.wins.after) then
+    vim.api.nvim_set_current_win(state.wins.after)
+  end
   return true
 end
 
@@ -693,7 +743,7 @@ function M.follow()
     M.save(tab, state)
   end
   if state.bufs and state.bufs[pane] == buf then
-    set_diff(win, true)
+    set_diff(win, true, state.pair)
     return
   end
   if not M.is_file_buf(buf) or not M.has_panes(state) then
