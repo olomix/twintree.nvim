@@ -111,12 +111,15 @@ function M.cut(name, room)
   return head(name, keep - tail_room) .. ELLIPSIS .. tail(name, tail_room)
 end
 
----Make a name safe to show on one buffer line.
-local function display(name)
+---Make a name safe to show on one line.
+---@param name string
+---@return string
+function M.display(name)
   return (name:gsub("%c", function(char)
     return char == "\n" and "\\n" or ("\\x%02x"):format(char:byte())
   end))
 end
+local display = M.display
 
 local function sort_nodes(nodes)
   table.sort(nodes, function(a, b)

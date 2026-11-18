@@ -9,6 +9,25 @@ package.path = root .. "/?.lua;" .. package.path
 
 vim.o.swapfile = false
 
+-- Keeps every spec, and every child Neovim, away from the system clipboard.
+vim.g.clipboard = {
+  name = "test",
+  copy = {
+    ["+"] = function(lines)
+      _G.test_clipboard = table.concat(lines, "\n")
+    end,
+    ["*"] = function() end,
+  },
+  paste = {
+    ["+"] = function()
+      return vim.split(_G.test_clipboard or "", "\n")
+    end,
+    ["*"] = function()
+      return {}
+    end,
+  },
+}
+
 -- Keep the user's git config (signing, hooks, includes) out of test repos.
 vim.env.GIT_CONFIG_GLOBAL = "/dev/null"
 vim.env.GIT_CONFIG_NOSYSTEM = "1"

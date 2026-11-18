@@ -101,6 +101,39 @@ function M.open(revs)
   return tab
 end
 
+---Copy the path of the tree line under the cursor, or of the file the diff
+---shows, to the clipboard.
+---@param form? "relative"|"absolute"|"name" defaults to "relative"
+---@return string? text what was copied
+---@return string? err
+function M.copy_path(form)
+  local path = require("twintree.path")
+  form = form or "relative"
+  if not vim.list_contains(path.FORMS, form) then
+    return nil,
+      ("unknown form '%s': use %s"):format(form, "relative, absolute or name")
+  end
+  local target, err = path.target()
+  if not target then
+    return nil, err
+  end
+  local text
+  text, err = path.text(target, form)
+  if not text then
+    return nil, err
+  end
+  -- Without a provider the write raises nothing and the text is lost.
+  if vim.fn.has("clipboard") == 0 then
+    return nil, "no clipboard provider, see :help clipboard"
+  end
+  -- Characterwise: a name that ends in a line break is not a whole line.
+  local written, reason = pcall(vim.fn.setreg, "+", text, "c")
+  if not written then
+    return nil, "could not write the clipboard: " .. tostring(reason)
+  end
+  return text
+end
+
 ---Remove cached worktrees of the current repository that no session uses.
 ---@return integer? removed
 ---@return string? err

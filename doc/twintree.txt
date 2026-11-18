@@ -138,6 +138,29 @@ Both commands report an error when the current tab has no diff.
     Ctrl+F, see |tui-csiu|. Elsewhere Neovim receives `]<C-f>`, and the key
     shows the next file instead of the last.
 
+                                                            *:TwintreeCopyPath*
+:TwintreeCopyPath [{form}]
+    Copy a path to the clipboard, register "+", and show what was copied.
+    {form} is one of:
+
+        relative    The path from the repository root. The default.
+        absolute    The full path of the file.
+        name        The last component of the path.
+
+    In the tree, the path is that of the file or directory on the line of
+    the cursor. Elsewhere in the diff tab, it is that of the file the panes
+    show, also when the tree does not list that file. A file outside the
+    repository has no relative path.
+
+    The absolute path is the file of the after side, or of the before side
+    when the file or directory exists only there, as for a deleted file.
+    It is a path with symbolic links resolved.
+
+    Without a clipboard provider the command says so, see |clipboard|. Two
+    things it cannot tell: a clipboard tool that fails after it was
+    started, and a `g:clipboard` set to false, with which "+" is an
+    ordinary register.
+
                                                                *:TwintreeClean*
 :TwintreeClean
     Remove the cached worktrees of the current repository. Worktrees used by
@@ -150,7 +173,36 @@ Tree window (left):
 
     <CR>    On a file: show it in both panes and move to the after pane.
             On a directory: fold or unfold it.
+    <2-LeftMouse>
+            A double click on a line does what <CR> does there.
     R       Recompute the list of changed files.
+
+    A single click, a drag and a triple click are not mapped: they move the
+    cursor and select text as in any buffer. A double click selects no word
+    in the tree.
+
+    A buffer-local key that you map for the filetype `twintree` in a
+    |FileType| autocommand replaces the key of the plugin.
+
+    <CR> and the double click work in the tab of the diff. In a tree buffer
+    that you opened in another tab they say that the diff of the tree is
+    in another tab.
+
+                                                               *twintree-menu*
+    The menu of the right mouse button, see |popup-menu|, starts with three
+    items when it opens in normal mode on a file or directory line of the
+    tree:
+
+        Copy relative path
+        Copy absolute path
+        Copy file name
+
+    They run |:TwintreeCopyPath| for the line of the cursor. With
+    'mousemodel' "popup_setpos", the default, that is the line you clicked.
+    With "popup" the cursor does not move, and the items appear only for a
+    click in the tree window you are in. With "extend" there is no menu.
+    The items are not in the menu anywhere else, and the plugin changes no
+    other item.
 
 Anywhere in a diff tab, in normal mode:                        *twintree-keys*
 
