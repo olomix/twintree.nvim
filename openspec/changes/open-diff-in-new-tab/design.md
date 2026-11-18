@@ -109,7 +109,9 @@ once.
   closes nothing. `:tabnew` puts its empty buffer into the window that
   is current when the tab is closed under it, so `create()` gives that
   window the buffer it showed before, deletes the stray one, and makes
-  the tab of the command current again.
+  the tab of the command current again. It does this only for a buffer
+  that did not exist before `:tabnew`, has no name and is not modified;
+  a buffer that the autocommand put into the window itself is left.
 - When a new tab exists and `:tabnew` or the layout failed, it closes
   that tab with `:tabclose!` and makes the tab of the command current
   again, since which tab follows a closed one is the user's setting.

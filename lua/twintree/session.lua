@@ -239,9 +239,12 @@ end
 ---  the tree buffer is left to the caller
 function M.create(repo, before, after, tree_buf)
   local origin = vim.api.nvim_get_current_tabpage()
-  local existed, shown = {}, {}
+  local existed, shown, known = {}, {}, {}
   for _, existing in ipairs(vim.api.nvim_list_tabpages()) do
     existed[existing] = true
+  end
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    known[buf] = true
   end
   for _, win in ipairs(vim.api.nvim_list_wins()) do
     shown[win] = vim.api.nvim_win_get_buf(win)
@@ -253,10 +256,14 @@ function M.create(repo, before, after, tree_buf)
     -- The new tab is gone and a tab of the user is current, the one of the
     -- command or its neighbour: never fill or close it. `:tabnew` puts its
     -- empty buffer into the window that is current when the tab is closed
-    -- under it: give that window its buffer back.
+    -- under it: give that window its buffer back. Only for that buffer; a
+    -- buffer the autocommand put there itself stays.
     local win = vim.api.nvim_get_current_win()
     local stray, buf = vim.api.nvim_win_get_buf(win), shown[win]
-    if buf and stray ~= buf and vim.api.nvim_buf_is_valid(buf) then
+    local from_tabnew = not known[stray]
+      and vim.api.nvim_buf_get_name(stray) == ""
+      and not vim.bo[stray].modified
+    if from_tabnew and buf and vim.api.nvim_buf_is_valid(buf) then
       pcall(vim.api.nvim_win_set_buf, win, buf)
       pcall(vim.api.nvim_buf_delete, stray, {})
     end

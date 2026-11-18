@@ -1166,6 +1166,29 @@ describe("session", function()
       assert.equals(origin, api.nvim_get_current_tabpage())
     end)
 
+    it("keeps a buffer that an autocommand shows after it closed the new tab", function()
+      dirty()
+      vim.cmd.edit(repo .. "/new.txt")
+      local other = api.nvim_get_current_buf()
+      vim.cmd.edit(repo .. "/a.txt")
+      local origin = api.nvim_get_current_win()
+      local id = api.nvim_create_autocmd("TabNewEntered", {
+        once = true,
+        callback = function()
+          vim.cmd("tabclose")
+          vim.cmd.buffer(other)
+        end,
+      })
+      local ok, tab = pcall(twintree.open)
+      pcall(api.nvim_del_autocmd, id)
+
+      assert.is_true(ok, tostring(tab))
+      assert.is_nil(tab)
+      assert.equals(1, #api.nvim_list_tabpages())
+      assert.is_true(api.nvim_buf_is_valid(other))
+      assert.equals(other, api.nvim_win_get_buf(origin))
+    end)
+
     it("reports an autocommand that fails while the tab is opened", function()
       dirty()
       local origin = api.nvim_get_current_win()

@@ -77,6 +77,12 @@ only tab and shows nothing but an empty buffer.
   was run in is current, and that tab and the tab Neovim moved to when
   the new one closed have their windows and buffers as before
 
+#### Scenario: New tab closed and another buffer shown
+- **WHEN** an autocommand of the user closes the new tab and then shows
+  a buffer of its choice in the window
+- **THEN** the command reports that no tab could be opened, and that
+  buffer still exists and is still shown
+
 #### Scenario: Autocommand that fails while the tab is opened
 - **WHEN** an autocommand of the user raises an error while the new tab
   is created
