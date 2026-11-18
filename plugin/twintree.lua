@@ -58,7 +58,46 @@ for name, action in pairs({ TwintreeFirstFile = "first", TwintreeLastFile = "las
   end, { desc = ("Show the %s changed file of the diff"):format(action) })
 end
 
+vim.api.nvim_create_user_command("TwintreeCopyPath", function(cmd)
+  local text, err = require("twintree").copy_path(cmd.args ~= "" and cmd.args or nil)
+  if not text then
+    report(err)
+    return
+  end
+  vim.notify("twintree: copied " .. require("twintree.tree").display(text))
+end, {
+  nargs = "?",
+  desc = "Copy the path of a changed file: relative, absolute or name",
+  complete = function(arg_lead)
+    return vim.tbl_filter(function(form)
+      return vim.startswith(form, arg_lead)
+    end, require("twintree.path").FORMS)
+  end,
+})
+
 local group = vim.api.nvim_create_augroup("twintree", { clear = true })
+
+-- Items left in the global menu by the code that was loaded before.
+require("twintree.menu").remove()
+
+vim.api.nvim_create_autocmd("MenuPopup", {
+  group = group,
+  pattern = "n",
+  desc = "Offer to copy the path of a tree line in the right-click menu",
+  callback = function()
+    require("twintree.menu").refresh()
+  end,
+})
+
+-- `:popup` shows the menu without MenuPopup, so the items go with the tree.
+vim.api.nvim_create_autocmd("BufLeave", {
+  group = group,
+  pattern = "twintree://tree/*",
+  desc = "Take the copy items out of the right-click menu",
+  callback = function()
+    require("twintree.menu").remove()
+  end,
+})
 
 -- BufNew, not BufReadPre: an existing swap file is checked before reading.
 vim.api.nvim_create_autocmd("BufNew", {

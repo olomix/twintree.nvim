@@ -64,8 +64,16 @@ In the tree:
 
 | Key | Action |
 |---|---|
-| `<CR>` | Show the file in both panes, or fold a directory |
+| `<CR>`, double click | Show the file in both panes, or fold a directory |
 | `R` | Refresh the list of changed files |
+
+A single click and a drag are left alone: they move the cursor and select
+text as in any buffer. A key you map for the `twintree` filetype replaces
+the key of the plugin.
+
+The menu of the right mouse button has three items in the tree, "Copy
+relative path", "Copy absolute path" and "Copy file name", for the file or
+directory you clicked. They do what `:TwintreeCopyPath` does.
 
 Anywhere in the diff tab:
 
@@ -75,6 +83,14 @@ Anywhere in the diff tab:
 | `[<C-f>`, `:TwintreePrevFile` | Show the previous changed file |
 | `:TwintreeFirstFile` | Show the first changed file |
 | `:TwintreeLastFile` | Show the last changed file |
+| `:TwintreeCopyPath {form}` | Copy a path to the clipboard |
+
+`:TwintreeCopyPath` takes `relative` (the default, the path from the
+repository root), `absolute` or `name`. In the tree it copies the path of
+the line under the cursor, a file or a directory. Elsewhere in the diff tab
+it copies the path of the file the panes show. The absolute path is the
+file of the after side, or of the before side when the file exists only
+there.
 
 The files come in the order of the tree, and files inside a folded
 directory are skipped. Next and previous take a count (`3]<C-f>`). At the

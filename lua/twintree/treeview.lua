@@ -34,7 +34,6 @@ function M.create_buf()
   -- `sweep` deletes it when its tab is closed.
   vim.bo[buf].bufhidden = "hide"
   vim.bo[buf].modifiable = false
-  vim.bo[buf].filetype = "twintree"
   vim.api.nvim_buf_set_name(buf, M.NAME_PREFIX .. buf)
 
   -- Callbacks require the module at call time to pick up reloaded code.
@@ -44,6 +43,17 @@ function M.create_buf()
   vim.keymap.set("n", "R", function()
     require("twintree.treeview").refresh()
   end, { buffer = buf, desc = "Twintree: refresh changed files" })
+  vim.keymap.set("n", "<2-LeftMouse>", function()
+    local mouse = vim.fn.getmousepos()
+    -- The mapping also fires for a click on the status line, the separator,
+    -- the tab line and the command line; those stay Neovim's.
+    if mouse.winid ~= vim.api.nvim_get_current_win() or mouse.line == 0 then
+      return "<2-LeftMouse>"
+    end
+    return "<Cmd>lua require('twintree.treeview').activate()<CR>"
+  end, { buffer = buf, expr = true, desc = "Twintree: open file or toggle directory" })
+  -- Last: a FileType autocommand of the user can then replace these keys.
+  vim.bo[buf].filetype = "twintree"
   return buf
 end
 
@@ -189,6 +199,13 @@ function M.first_file(tab)
   end
 end
 
+---The line of the tree of `state` at the cursor of the current window.
+---@param state twintree.Session
+---@return twintree.Line?
+function M.cursor_line(state)
+  return lines_of(state)[vim.api.nvim_win_get_cursor(0)[1]]
+end
+
 ---Open the file or toggle the directory under the cursor.
 function M.activate()
   local tab = vim.api.nvim_get_current_tabpage()
@@ -196,8 +213,7 @@ function M.activate()
   if not state then
     return
   end
-  local row = vim.api.nvim_win_get_cursor(0)[1]
-  local line = lines_of(state)[row]
+  local line = M.cursor_line(state)
   if not line then
     return
   end
