@@ -22,6 +22,8 @@
 - [x] 2.4 Verify with a spec that a client that was asked to stop and whose server delays its answer is not asked again and not terminated when another tab is closed
 - [x] 2.5 Verify with specs that a client whose `stop` raises causes no error and does not keep the other clients from being stopped, and that closing a tab with no LSP client at all works
 
+- [x] 2.6 Verify with a spec that the server of a worktree that `:TwintreeClean` removed is stopped once its last buffer is gone, and with a spec that a `BufWipeout` autocommand that raises for every buffer, the tree buffer included, does not make `:tabclose` fail
+
 ## 3. Documentation
 
 - [x] 3.1 Update `doc/twintree.txt` and `README.md` as in design decision 7; verify that no sentence still says the plugin contains no LSP code or that language servers keep their index across diffs, that the limit for a server that is still starting is stated, and that `:helptags doc` succeeds

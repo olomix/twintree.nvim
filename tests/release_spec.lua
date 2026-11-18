@@ -219,6 +219,28 @@ describe("releasing unused worktrees", function()
       assert.is_nil(find(root .. "/a.txt"))
     end)
 
+    it("does not fail on a global BufWipeout autocommand that raises", function()
+      local tab, root = open()
+      local tree = session.get(tab).tree_buf
+      local group = api.nvim_create_augroup("release_spec", {})
+      api.nvim_create_autocmd("BufWipeout", {
+        group = group,
+        callback = function()
+          error("a broken autocommand")
+        end,
+      })
+
+      local closed, err = pcall(close, tab)
+      api.nvim_del_augroup_by_id(group)
+
+      assert.is_true(closed, err)
+      assert.is_false(api.nvim_tabpage_is_valid(tab))
+      -- Neovim keeps a buffer whose autocommand failed; the next tab takes it.
+      close_plain_tab()
+      assert.is_false(api.nvim_buf_is_valid(tree))
+      assert.is_nil(find(root .. "/a.txt"))
+    end)
+
     it("keeps the worktree on disk and shows its files again", function()
       local tab, root = open()
       local tree = session.get(tab).tree_buf
@@ -465,6 +487,24 @@ describe("releasing unused worktrees", function()
       close(first)
 
       assert.is_true(still_runs(above, above_server))
+    end)
+
+    it("stops the server of a worktree that :TwintreeClean removed", function()
+      local tab, root = open()
+      local client, server = h.lsp({ root_dir = root })
+      local buf = attached(client, root .. "/a.txt")
+      api.nvim_win_set_buf(api.nvim_tabpage_get_win(base), buf)
+      close(tab)
+      assert.is_true(still_runs(client, server))
+      twintree.clean()
+      assert.equals(0, vim.fn.isdirectory(root))
+
+      vim.cmd.enew()
+      close_plain_tab()
+
+      assert.is_false(api.nvim_buf_is_valid(buf))
+      assert.is_true(exited(server))
+      assert.is_true(h.lsp_gone(client))
     end)
 
     it("does not ask a stopping server again and does not force it", function()

@@ -296,7 +296,9 @@ function M.sweep()
       and vim.api.nvim_buf_is_valid(buf)
       and vim.startswith(vim.api.nvim_buf_get_name(buf), M.NAME_PREFIX)
     then
-      vim.api.nvim_buf_delete(buf, { force = true })
+      -- Not nvim_buf_delete(): an error of a user's BufWipeout autocommand
+      -- escapes its pcall and reaches the `:tabclose` of the user.
+      pcall(vim.cmd.bwipeout, { buf, bang = true })
     end
   end
 end

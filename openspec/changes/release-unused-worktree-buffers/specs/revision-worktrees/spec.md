@@ -82,6 +82,11 @@ wipe out SHALL NOT cause an error.
 - **THEN** the tab is closed without an error and the other buffers of
   the worktree are gone
 
+#### Scenario: Autocommand that fails for every buffer
+- **WHEN** an autocommand of the user for `BufWipeout` raises an error for
+  every buffer, and the user closes the diff tab
+- **THEN** the tab is closed without an error
+
 #### Scenario: Layout changed before the tab is closed
 - **WHEN** the user closed a pane, put another file into a pane, or split
   a pane of a diff tab, and then closes that tab
@@ -148,6 +153,12 @@ client, and a client it cannot stop SHALL NOT cause an error.
 - **WHEN** the root of a language server is a subdirectory of the cached
   worktree, it has no buffer left, and the user closes the diff tab
 - **THEN** the server is stopped
+
+#### Scenario: Server of a removed worktree
+- **WHEN** `:TwintreeClean` removed a cached worktree while a buffer of it
+  was still shown, and that buffer is hidden later and a tab is closed
+- **THEN** the buffer is gone and the language server of that worktree is
+  stopped
 
 #### Scenario: Server without a workspace
 - **WHEN** a language server has no root directory and no workspace

@@ -187,15 +187,12 @@ function M.root_of(path)
     return nil
   end
   local parts = vim.split(resolved:sub(#cache + 2), "/", { plain = true })
-  if #parts < 2 then
+  -- By name, not by what is on disk: the root of a removed worktree counts,
+  -- a file next to the commit directories does not.
+  if #parts < 2 or not parts[2]:match("^%x+$") or #parts[2] < 40 then
     return nil
   end
-  local root = vim.fs.joinpath(cache, parts[1], parts[2])
-  -- A file next to the commit directories is not a worktree.
-  if #parts == 2 and vim.fn.isdirectory(root) == 0 then
-    return nil
-  end
-  return root
+  return vim.fs.joinpath(cache, parts[1], parts[2])
 end
 
 ---Buffers that an entry of a quickfix or location list points at.

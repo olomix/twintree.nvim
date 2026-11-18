@@ -88,8 +88,10 @@ the group; an existing spec counts them.
 The autocommand becomes `nested = true`. Without it Neovim fires no
 buffer events for what the callback wipes out, and everything that cleans
 up per buffer is skipped. `treeview.sweep()` then fires those events for
-the tree buffer as well, which is harmless. Wiping out a hidden buffer
-enters no window, so `session.follow` does not run.
+the tree buffer as well, so it removes the buffer the same way as
+decision 3 does: an autocommand of the user that fails must not reach
+`:tabclose`. Wiping out a hidden buffer enters no window, so
+`session.follow` does not run.
 
 It runs for every closed tab, not only for a diff tab: the closed tab can
 no longer say what it was, and a buffer that was kept because a window
@@ -108,8 +110,11 @@ same diff again.
 
 A path belongs to a cached worktree when, after `worktree.resolve`, it
 lies at or below a directory two levels under the resolved cache
-directory, `<cache>/<repository>-<hash>/<commit>`. That directory is its
-worktree root. A file directly in the cache directory or in a repository
+directory, `<cache>/<repository>-<hash>/<commit>`, whose name is a full
+commit hash. That directory is its worktree root. It is recognized by
+its name and not by what is on disk: the root of a worktree that
+`:TwintreeClean` removed still counts, so that its language server is
+stopped. A file directly in the cache directory or in a repository
 directory belongs to none and is never touched. `is_cached` alone is too
 wide for this, so `worktree.lua` gets a function that returns the
 worktree root of a path, or nil.
@@ -146,6 +151,8 @@ without force: marks and the buffer number go as well, and a buffer that
 cannot be wiped out is left. `pcall(vim.api.nvim_buf_delete, …)` is not
 used: in a nested autocommand an error raised by a `BufWipeout`
 autocommand of the user escapes it and stops the remaining wipes.
+Neovim keeps a buffer whose autocommand failed; the sweep of a later
+closed tab takes it.
 
 A buffer of a cached file that the user opened by hand, outside a diff,
 is treated the same: hidden and unused, it goes with the next closed tab.
