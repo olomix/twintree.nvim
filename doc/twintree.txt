@@ -69,6 +69,13 @@ COMMANDS                                                    *twintree-commands*
     cached. When the diff is the only tab, as after `nvim +Twintree`,
     `:tabclose` refuses to close the last tab; quit Neovim with `:qa`.
 
+    When no other diff uses that worktree, the buffers of its files are
+    wiped out and its language server is stopped, see |twintree-lsp|. A
+    buffer stays when a window still shows it, when a quickfix or location
+    list refers to it, or when it has unsaved changes; it goes when a later
+    tab is closed and that is no longer so. Files of your working directory
+    are never touched.
+
                                                           *:TwintreeToggleTree*
 :TwintreeToggleTree
     Hide the tree of the current diff tab, or show it again. The tree is
@@ -375,9 +382,9 @@ Every side that is a commit is a git worktree with a detached HEAD, stored at
     <cache_dir>/<repository>-<hash>/<commit>
 <
 Worktrees are kept after the diff is closed and reused the next time the same
-commit is needed, so reopening a diff is fast and language servers keep their
-index. They are registered in your repository and appear in
-`git worktree list`. They lock no branch.
+commit is needed, so reopening a diff does not check the commit out again.
+They are registered in your repository and appear in `git worktree list`.
+They lock no branch.
 
 Use |:TwintreeClean| to remove them. Worktrees of a repository that no longer
 exists can be deleted from the cache directory by hand.
@@ -385,9 +392,20 @@ exists can be deleted from the cache directory by hand.
 ==============================================================================
 LANGUAGE SERVERS                                                 *twintree-lsp*
 
-The plugin contains no LSP code. A worktree has the same root markers as your
-checkout, so your LSP configuration starts a second client for it. Check with
-`:checkhealth vim.lsp` that the two sides use clients with different roots.
+The plugin starts and configures no language server. A worktree has the same
+root markers as your checkout, so your LSP configuration starts a second
+client for it. Check with `:checkhealth vim.lsp` that the two sides use
+clients with different roots.
+
+When a tab is closed and no diff uses a cached worktree any more, the plugin
+wipes out the hidden buffers of its files and stops the clients of Neovim's
+built-in LSP client that have no buffer left and work on nothing but such
+worktrees. A server of your working directory is never stopped. Opening a
+diff of the same commit again starts the server again.
+
+A server that was still starting when the tab was closed keeps running; it
+is stopped when the next tab is closed. Language servers of other LSP
+clients (coc.nvim, ALE) are not stopped.
 
 ==============================================================================
 LIMITATIONS                                              *twintree-limitations*

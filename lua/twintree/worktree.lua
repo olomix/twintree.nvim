@@ -170,6 +170,116 @@ function M.is_cached(path)
   return vim.startswith(M.resolve(path), cache .. "/")
 end
 
+---Root of the cached worktree that holds `path`: the directory of a commit,
+---two levels below the cache directory.
+---@param path string
+---@return string? root
+function M.root_of(path)
+  if path == "" then
+    return nil
+  end
+  local cache = vim.uv.fs_realpath(config.cache_dir())
+  if not cache then
+    return nil
+  end
+  local resolved = M.resolve(path)
+  if not vim.startswith(resolved, cache .. "/") then
+    return nil
+  end
+  local parts = vim.split(resolved:sub(#cache + 2), "/", { plain = true })
+  if #parts < 2 then
+    return nil
+  end
+  local root = vim.fs.joinpath(cache, parts[1], parts[2])
+  -- A file next to the commit directories is not a worktree.
+  if #parts == 2 and vim.fn.isdirectory(root) == 0 then
+    return nil
+  end
+  return root
+end
+
+---Buffers that an entry of a quickfix or location list points at.
+---@return table<integer, true>
+local function buffers_in_lists()
+  local found = {}
+  local function collect(get)
+    for nr = 1, get({ nr = "$" }).nr do
+      for _, item in ipairs(get({ nr = nr, items = 1 }).items) do
+        found[item.bufnr] = true
+      end
+    end
+  end
+  collect(vim.fn.getqflist)
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    collect(function(what)
+      return vim.fn.getloclist(win, what)
+    end)
+  end
+  return found
+end
+
+---@param client vim.lsp.Client
+---@return string[] folders the client works on
+local function client_folders(client)
+  local folders = {}
+  for _, folder in ipairs(client.workspace_folders or {}) do
+    table.insert(folders, vim.uri_to_fname(folder.uri))
+  end
+  if #folders == 0 and client.root_dir then
+    table.insert(folders, client.root_dir)
+  end
+  return folders
+end
+
+---Wipe out the hidden buffers of cached worktrees that are not in use, and
+---stop the LSP clients that worked on nothing else. Never raises.
+---@param in_use string[] roots of the panes of all open sessions
+function M.release(in_use)
+  local keep = {}
+  for _, root in ipairs(in_use) do
+    keep[real(root)] = true
+  end
+  local function unused(path)
+    local root = M.root_of(path)
+    return root ~= nil and not keep[root]
+  end
+
+  local in_lists = buffers_in_lists()
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if
+      vim.api.nvim_buf_is_valid(buf)
+      and vim.bo[buf].buftype == ""
+      and not vim.bo[buf].modified
+      and not in_lists[buf]
+      and #vim.fn.win_findbuf(buf) == 0
+      and unused(vim.api.nvim_buf_get_name(buf))
+    then
+      -- Not nvim_buf_delete(): an error of a user's BufWipeout autocommand
+      -- escapes its pcall and stops the remaining wipes.
+      pcall(vim.cmd.bwipeout, buf)
+    end
+  end
+
+  for _, client in ipairs(vim.lsp.get_clients()) do
+    pcall(function()
+      if next(client.attached_buffers) ~= nil or client:is_stopped() then
+        return
+      end
+      local folders = client_folders(client)
+      if #folders == 0 then
+        return
+      end
+      for _, folder in ipairs(folders) do
+        if not unused(folder) then
+          return
+        end
+      end
+      -- An explicit false: no argument means a forced stop after a timeout.
+      client:stop(false)
+    end)
+  end
+end
+
 ---Keep a cached worktree file from using a swap file. The cache is shared
 ---by all Neovim instances, and a second one would stop on E325 otherwise.
 ---@param buf integer

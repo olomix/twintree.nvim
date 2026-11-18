@@ -875,6 +875,21 @@ function M.follow()
   end
 end
 
+---Roots of both panes of every open session, the working directory included.
+---@return string[]
+function M.pane_roots()
+  local roots = {}
+  for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+    local state = M.get(tab)
+    if state then
+      for _, pane in ipairs(PANES) do
+        table.insert(roots, state[pane].root)
+      end
+    end
+  end
+  return roots
+end
+
 ---Worktree roots used by open sessions.
 ---@return string[]
 function M.roots_in_use()
