@@ -1037,6 +1037,27 @@ describe("session", function()
       assert.equals(origin, api.nvim_get_current_win())
       assert.is_nil(session.get())
       assert.same({}, tree_bufs())
+      -- What TabClosed and TabEnter do for a tab that closes in the open.
+      assert.equals("", vim.fn.maparg("]<C-f>", "n"))
+      for _, loaded in ipairs(api.nvim_list_bufs()) do
+        assert.is_nil(worktree.root_of(api.nvim_buf_get_name(loaded)))
+      end
+
+      -- The buffers of a worktree that was cached before go as well.
+      local cached = assert(worktree.ensure(repo, first))
+      id = api.nvim_create_autocmd("BufReadPost", {
+        pattern = "*/a.txt",
+        once = true,
+        callback = function()
+          vim.cmd("tabclose!")
+        end,
+      })
+      assert.is_nil(twintree.open())
+      pcall(api.nvim_del_autocmd, id)
+      assert.same({ cached }, worktree.list(repo))
+      for _, loaded in ipairs(api.nvim_list_bufs()) do
+        assert.is_nil(worktree.root_of(api.nvim_buf_get_name(loaded)))
+      end
     end)
 
     it("is gone again when the windows of the diff cannot be made", function()
@@ -1059,6 +1080,78 @@ describe("session", function()
       assert.is_nil(session.get())
       assert.same({}, tree_bufs())
       assert.same({}, worktree.list(repo))
+    end)
+
+    it("leaves the tab of the command alone when an autocommand closes the new tab", function()
+      dirty()
+      vim.cmd.edit(repo .. "/a.txt")
+      local origin, buf = api.nvim_get_current_win(), api.nvim_get_current_buf()
+      local id = api.nvim_create_autocmd("TabEnter", {
+        once = true,
+        callback = function()
+          vim.cmd("tabclose")
+        end,
+      })
+      local ok, tab, err = pcall(twintree.open)
+      pcall(api.nvim_del_autocmd, id)
+
+      assert.is_true(ok, tostring(tab))
+      assert.is_nil(tab)
+      assert.truthy(err:find("could not open a tab for the diff", 1, true), err)
+      assert.equals(1, #api.nvim_list_tabpages())
+      assert.same({ origin }, api.nvim_tabpage_list_wins(0))
+      assert.equals(buf, api.nvim_win_get_buf(origin))
+      assert.equals("", vim.bo[buf].bufhidden)
+      assert.is_nil(session.get())
+      assert.same({}, tree_bufs())
+      assert.same({}, worktree.list(repo))
+    end)
+
+    it("reports an autocommand that fails while the tab is opened", function()
+      dirty()
+      local origin = api.nvim_get_current_win()
+      local id = api.nvim_create_autocmd("TabNew", {
+        once = true,
+        callback = function()
+          error("a broken autocommand")
+        end,
+      })
+      local ok, tab, err = pcall(twintree.open)
+      pcall(api.nvim_del_autocmd, id)
+
+      assert.is_true(ok, tostring(tab))
+      assert.is_nil(tab)
+      assert.truthy(err:find("a broken autocommand", 1, true), err)
+      assert.equals(1, #api.nvim_list_tabpages())
+      assert.equals(origin, api.nvim_get_current_win())
+      assert.is_nil(session.get())
+      assert.same({}, tree_bufs())
+      assert.same({}, worktree.list(repo))
+    end)
+
+    it("counts as a failed open when an autocommand closes it after the file was shown", function()
+      h.write(repo, "a.txt", "one\nTWO\nthree\n")
+      local origin = api.nvim_get_current_win()
+      -- The focus goes to the after pane when both files are loaded.
+      local id = api.nvim_create_autocmd("WinEnter", {
+        callback = function()
+          local state = session.get()
+          if state and api.nvim_get_current_win() == state.wins.after and state.pair then
+            vim.cmd("tabclose!")
+          end
+        end,
+      })
+      local ok, tab, err = pcall(twintree.open)
+      pcall(api.nvim_del_autocmd, id)
+
+      assert.is_true(ok, tostring(tab))
+      assert.is_nil(tab)
+      assert.equals(session.TAB_GONE, err)
+      assert.equals(1, #api.nvim_list_tabpages())
+      assert.equals(origin, api.nvim_get_current_win())
+      assert.same({}, tree_bufs())
+      assert.same({}, worktree.list(repo))
+      assert.equals("", vim.fn.maparg("]<C-f>", "n"))
     end)
 
     it("returns to the tab of the command when that one has tabs after it", function()

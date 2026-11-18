@@ -99,20 +99,31 @@ the diff. Rejected: there is no event for a refused `:tabclose`.
 
 ### 2. A layout that cannot be made closes its tab
 
-`create()` runs everything after `:tabnew` in `pcall`. On an error it
-closes the tab it opened with `:tabclose!`, when that tab is still valid
-and not the only one, makes the tab the command was run in current
-again, since which tab follows a closed one is the user's setting, and
-returns `nil` and a message that names the reason. `open()` then calls
-`treeview.sweep()`, which deletes the tree buffer no session owns, and
-passes the message to its `fail()`, which removes the worktrees the
-command created.
+`create()` runs `:tabnew` and everything after it in `pcall`: an
+autocommand of the user can fail in `:tabnew` or close the new tab at
+once.
 
-`open()` does not rely on `TabClosed` for this: Neovim fires no
-`TabClosed` for a tab that is closed inside another autocommand. For the
-same reason the existing path for a tab that an autocommand closes while
-the first file is shown now calls `treeview.sweep()` and
-`worktree.release()` itself; until now it left the tree buffer behind.
+- When the current tab is still the one the command was run in, no tab
+  was opened. `create()` fills nothing and closes nothing. `:tabnew`
+  puts its empty buffer into the window that is current when the tab is
+  closed under it, so `create()` gives that window its buffer back and
+  deletes the stray one.
+- When a new tab exists and `:tabnew` or the layout failed, it closes
+  that tab with `:tabclose!` and makes the tab of the command current
+  again, since which tab follows a closed one is the user's setting.
+
+In both cases it returns `nil` and a message that names the reason.
+
+`open()` has one way to fail once the tab of the diff is gone, used for
+a failed `create()` and for a tab that an autocommand closed while, or
+right after, the first file was shown; `open()` checks that the session
+is still there also when the file was shown. It does what `TabClosed`
+and `TabEnter` would do, since Neovim fires neither for a tab closed
+inside another autocommand: `treeview.sweep()` deletes the tree buffer
+no session owns, `worktree.release()` wipes the buffers of worktrees no
+diff uses, `keys.sync()` gives the keys back, and `fail()` removes the
+worktrees the command created. Until now a tab closed that way left the
+tree buffer and the keys behind.
 
 Alternative: check the size of the terminal first. Rejected: the room
 needed depends on options and on the user's windows; trying and undoing

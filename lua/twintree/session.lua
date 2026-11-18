@@ -239,19 +239,37 @@ end
 ---  the tree buffer is left to the caller
 function M.create(repo, before, after, tree_buf)
   local origin = vim.api.nvim_get_current_tabpage()
-  vim.cmd.tabnew()
+  local origin_win = vim.api.nvim_get_current_win()
+  local origin_buf = vim.api.nvim_get_current_buf()
+  -- An autocommand of the user can fail in `:tabnew`, or close the new tab.
+  local ok, result = pcall(vim.cmd.tabnew)
   local tab = vim.api.nvim_get_current_tabpage()
-  local ok, result = pcall(fill_tab, repo, before, after, tree_buf)
+  if tab == origin then
+    -- Never fill, or close, the tab the command was run in. `:tabnew` puts
+    -- its empty buffer into the window that is current when the tab is
+    -- closed under it: give that window its buffer back.
+    local stray = vim.api.nvim_win_is_valid(origin_win)
+      and vim.api.nvim_win_get_buf(origin_win)
+    if stray and stray ~= origin_buf and vim.api.nvim_buf_is_valid(origin_buf) then
+      pcall(vim.api.nvim_win_set_buf, origin_win, origin_buf)
+      pcall(vim.api.nvim_buf_delete, stray, {})
+    end
+    return nil, "could not open a tab for the diff"
+      .. (ok and "" or ": " .. tostring(result))
+  end
   if ok then
-    return result
+    ok, result = pcall(fill_tab, repo, before, after, tree_buf)
+    if ok then
+      return result
+    end
   end
 
-  if vim.api.nvim_tabpage_is_valid(tab) and #vim.api.nvim_list_tabpages() > 1 then
+  if vim.api.nvim_tabpage_is_valid(tab) then
     pcall(vim.cmd, "tabclose! " .. vim.api.nvim_tabpage_get_number(tab))
   end
   -- Which tab Neovim makes current after a close is the user's setting.
   if vim.api.nvim_tabpage_is_valid(origin) then
-    vim.api.nvim_set_current_tabpage(origin)
+    pcall(vim.api.nvim_set_current_tabpage, origin)
   end
   return nil, "could not create the windows of the diff: " .. tostring(result)
 end

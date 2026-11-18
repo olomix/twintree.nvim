@@ -64,9 +64,24 @@ only tab and shows nothing but an empty buffer.
 
 #### Scenario: Tab closed while the first file is shown
 - **WHEN** `:Twintree` is run in the only tab and an autocommand closes
-  the new tab while the first file is shown
+  the new tab while the first file is shown, or when the file gets the
+  focus
 - **THEN** the command reports that the diff tab was closed, there is
-  one tab with its one window as it was, and no tree buffer is left
+  one tab with its one window as it was, no tree buffer and no buffer of
+  a cached worktree is left, and the keys of the plugin are not bound
+
+#### Scenario: New tab closed at once
+- **WHEN** an autocommand of the user closes the new tab as soon as it is
+  entered
+- **THEN** the command reports that no tab could be opened, and the tab
+  it was run in has its windows and its buffer as before
+
+#### Scenario: Autocommand that fails while the tab is opened
+- **WHEN** an autocommand of the user raises an error while the new tab
+  is created
+- **THEN** the command reports that error as a message, no Lua error is
+  raised, and no extra tab, no tree buffer and no worktree this command
+  created remains
 
 #### Scenario: Started from the command line without changes
 - **WHEN** Neovim is started with `nvim +Twintree` for a diff without
