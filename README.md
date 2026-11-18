@@ -53,12 +53,15 @@ it in the tree, has the cursor on its first change. When you come back to
 a file, the cursor is where you left it. A file you reach by a jump keeps
 the cursor of the jump.
 
-From the shell, the diff uses the first tab:
+From the shell:
 
 ```sh
 nvim +Twintree
 nvim +"Twintree main"
 ```
+
+Neovim then starts with two tabs: the empty one it always starts with, and
+the diff, which is the current tab.
 
 In the tree:
 
@@ -176,8 +179,9 @@ Files of the old side never use swap files.
 
 ### Closing the diff
 
-The diff lives in its own tab, opened next to the tabs you already have. To
-end it, close that tab with `:tabclose`. The worktree stays cached.
+The diff always opens in a new tab, next to the tabs you already have. To
+end it, close that tab with `:tabclose`. The worktree stays cached. After
+`nvim +Twintree` this leaves you in the empty tab; `:qa` quits Neovim.
 
 When no other diff uses that worktree, the buffers of its files are wiped
 out and its language server is stopped. A buffer stays when a window still
@@ -185,8 +189,9 @@ shows it, when a quickfix or location list refers to it, or when it has
 unsaved changes; it goes when a later tab is closed and that is no longer
 so. Files of your working directory are never touched.
 
-When the diff is the only tab, as after `nvim +Twintree`, `:tabclose` refuses
-to close the last tab; quit Neovim with `:qa`.
+If you close the other tabs, the diff is the only tab, and `:tabclose`
+refuses to close the last tab. Open one with `:tabnew` and close the diff tab
+from there, or quit Neovim with `:qa`.
 
 ### Windows and layout
 

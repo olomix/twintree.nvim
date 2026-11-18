@@ -189,37 +189,17 @@ function M.placeholder()
   return buf
 end
 
-local function is_blank_tab()
-  if #vim.api.nvim_list_tabpages() > 1 then
-    return false
-  end
-  if #vim.api.nvim_tabpage_list_wins(0) > 1 then
-    return false
-  end
-  local buf = vim.api.nvim_get_current_buf()
-  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-  return vim.api.nvim_buf_get_name(buf) == ""
-    and vim.bo[buf].buftype == ""
-    and not vim.bo[buf].modified
-    and #lines == 1
-    and lines[1] == ""
-end
-
----Create the three-column layout and register the session in its tab.
+---Fill the current tab, a new one, with the three-column layout and
+---register the session in it.
 ---@param repo string
 ---@param before twintree.Side
 ---@param after twintree.Side
 ---@param tree_buf integer
 ---@return integer tab
-function M.create(repo, before, after, tree_buf)
-  if not is_blank_tab() then
-    vim.cmd.tabnew()
-  end
+local function fill_tab(repo, before, after, tree_buf)
   local tab = vim.api.nvim_get_current_tabpage()
   local tree_win = vim.api.nvim_get_current_win()
   vim.bo[vim.api.nvim_get_current_buf()].bufhidden = "wipe"
-  -- The last window of an earlier diff keeps the option of its tree.
-  vim.wo[tree_win].winfixbuf = false
   vim.api.nvim_win_set_buf(tree_win, tree_buf)
 
   M.setup_tree_window(tree_win)
@@ -246,6 +226,34 @@ function M.create(repo, before, after, tree_buf)
   -- Required here, not at the top: the layout module requires this one.
   require("twintree.layout").reapply(tab)
   return tab
+end
+
+---Open a tab with the three-column layout and register the session in it.
+---Always a new tab: a diff in the only tab could not be closed.
+---@param repo string
+---@param before twintree.Side
+---@param after twintree.Side
+---@param tree_buf integer
+---@return integer? tab
+---@return string? err when the layout could not be made; the tab is gone,
+---  the tree buffer is left to the caller
+function M.create(repo, before, after, tree_buf)
+  local origin = vim.api.nvim_get_current_tabpage()
+  vim.cmd.tabnew()
+  local tab = vim.api.nvim_get_current_tabpage()
+  local ok, result = pcall(fill_tab, repo, before, after, tree_buf)
+  if ok then
+    return result
+  end
+
+  if vim.api.nvim_tabpage_is_valid(tab) and #vim.api.nvim_list_tabpages() > 1 then
+    pcall(vim.cmd, "tabclose! " .. vim.api.nvim_tabpage_get_number(tab))
+  end
+  -- Which tab Neovim makes current after a close is the user's setting.
+  if vim.api.nvim_tabpage_is_valid(origin) then
+    vim.api.nvim_set_current_tabpage(origin)
+  end
+  return nil, "could not create the windows of the diff: " .. tostring(result)
 end
 
 ---@param win integer

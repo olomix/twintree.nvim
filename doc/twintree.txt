@@ -59,15 +59,22 @@ COMMANDS                                                    *twintree-commands*
     quickfix entry, `:edit`) keeps the cursor of the jump and counts as
     shown. An added or deleted file is shown from its top.
 
-    The diff opens in a new tab. When Neovim was just started and shows only
-    an empty buffer, that tab is used instead: >
+    The diff always opens in a new tab, which becomes the current one. From
+    the shell: >
 
         nvim +Twintree
         nvim +"Twintree main"
 <
+    Neovim then starts with two tabs: the empty one it always starts with,
+    whose buffer stays in the buffer list, and the diff.
+
     To end the diff, close its tab with `:tabclose`. The worktree stays
-    cached. When the diff is the only tab, as after `nvim +Twintree`,
-    `:tabclose` refuses to close the last tab; quit Neovim with `:qa`.
+    cached. After `nvim +Twintree` this leaves you in the empty tab; `:qa`
+    quits Neovim.
+
+    If you close the other tabs, the diff is the only tab, and `:tabclose`
+    refuses to close the last tab. Open one with `:tabnew` and close the
+    diff tab from there, or quit with `:qa`.
 
     When no other diff uses that worktree, the buffers of its files are
     wiped out and its language server is stopped, see |twintree-lsp|. A

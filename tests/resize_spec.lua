@@ -578,7 +578,7 @@ describe("in a real terminal", function()
       assert.is_true(panes.before.diff)
       assert.is_true(panes.after.diff)
       local tree = tree_state()
-      assert.equals(1, tree.tabs)
+      assert.equals(2, tree.tabs)
       assert.equals("0.txt", tree.selected)
       settle(function(w)
         return w.tree == 35 and equal_panes(w)
@@ -664,8 +664,9 @@ describe("in a real terminal", function()
       assert.equals(repo .. "/a.txt", lua(PANES, tab).after.file)
       assert.equals("", lua("return vim.fn.maparg('[<C-f>', 'n')"))
 
-      -- And the plugin's when the diff tab is entered again.
-      press("gt")
+      -- And the plugin's when the diff tab is entered again. Not `gt`: the
+      -- tab after the new one is the empty tab Neovim started with.
+      press("gT")
       press("]<C-f>")
       settle_panes(function(p)
         return p.after.file == repo .. "/long.txt"

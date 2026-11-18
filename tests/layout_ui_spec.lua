@@ -368,8 +368,10 @@ describe("layout", function()
 
       assert(twintree.toggle_tree())
       local tree = tree()
-      assert.same({ 0, 0 }, api.nvim_win_get_position(tree))
-      assert.equals(vim.o.lines - vim.o.cmdheight - 1, api.nvim_win_get_height(tree))
+      -- The diff is in a second tab, so the tab line takes the first row.
+      assert.equals(2, #api.nvim_list_tabpages())
+      assert.same({ 1, 0 }, api.nvim_win_get_position(tree))
+      assert.equals(vim.o.lines - vim.o.cmdheight - 2, api.nvim_win_get_height(tree))
     end)
 
     it("rebuilds a tree whose buffer was deleted", function()

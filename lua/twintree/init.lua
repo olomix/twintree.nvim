@@ -78,8 +78,14 @@ function M.open(revs)
     return fail(err)
   end
 
-  local tab = session.create(repo, before, after, treeview.create_buf())
-  -- No TabEnter fires for a diff that opens in the tab Neovim started with.
+  local tab
+  tab, err = session.create(repo, before, after, treeview.create_buf())
+  if not tab then
+    -- The tree buffer of the tab that was closed again.
+    treeview.sweep()
+    return fail(err)
+  end
+  -- TabEnter fired inside `:tabnew`, before the session existed.
   require("twintree.keys").sync()
   treeview.set_entries(tab, entries)
 
@@ -89,6 +95,10 @@ function M.open(revs)
     if not ok then
       if not session.get(tab) then
         -- An autocommand closed the tab on the way: nothing was opened.
+        -- Neovim fires no TabClosed for a tab closed inside an autocommand,
+        -- so what that event releases is released here.
+        treeview.sweep()
+        worktree.release(session.pane_roots())
         return fail(show_err)
       end
       -- The session stays open: the tree is still of use without the file.
