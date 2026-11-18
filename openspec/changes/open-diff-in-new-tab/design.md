@@ -103,11 +103,13 @@ the diff. Rejected: there is no event for a refused `:tabclose`.
 autocommand of the user can fail in `:tabnew` or close the new tab at
 once.
 
-- When the current tab is still the one the command was run in, no tab
-  was opened. `create()` fills nothing and closes nothing. `:tabnew`
-  puts its empty buffer into the window that is current when the tab is
-  closed under it, so `create()` gives that window its buffer back and
-  deletes the stray one.
+- When the current tab is one that existed before `:tabnew`, the new
+  tab is gone: it is the tab of the command or, with Neovim's default
+  for a closed tab, the one after it. `create()` fills nothing and
+  closes nothing. `:tabnew` puts its empty buffer into the window that
+  is current when the tab is closed under it, so `create()` gives that
+  window the buffer it showed before, deletes the stray one, and makes
+  the tab of the command current again.
 - When a new tab exists and `:tabnew` or the layout failed, it closes
   that tab with `:tabclose!` and makes the tab of the command current
   again, since which tab follows a closed one is the user's setting.

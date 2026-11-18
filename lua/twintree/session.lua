@@ -239,20 +239,29 @@ end
 ---  the tree buffer is left to the caller
 function M.create(repo, before, after, tree_buf)
   local origin = vim.api.nvim_get_current_tabpage()
-  local origin_win = vim.api.nvim_get_current_win()
-  local origin_buf = vim.api.nvim_get_current_buf()
+  local existed, shown = {}, {}
+  for _, existing in ipairs(vim.api.nvim_list_tabpages()) do
+    existed[existing] = true
+  end
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    shown[win] = vim.api.nvim_win_get_buf(win)
+  end
   -- An autocommand of the user can fail in `:tabnew`, or close the new tab.
   local ok, result = pcall(vim.cmd.tabnew)
   local tab = vim.api.nvim_get_current_tabpage()
-  if tab == origin then
-    -- Never fill, or close, the tab the command was run in. `:tabnew` puts
-    -- its empty buffer into the window that is current when the tab is
-    -- closed under it: give that window its buffer back.
-    local stray = vim.api.nvim_win_is_valid(origin_win)
-      and vim.api.nvim_win_get_buf(origin_win)
-    if stray and stray ~= origin_buf and vim.api.nvim_buf_is_valid(origin_buf) then
-      pcall(vim.api.nvim_win_set_buf, origin_win, origin_buf)
+  if existed[tab] then
+    -- The new tab is gone and a tab of the user is current, the one of the
+    -- command or its neighbour: never fill or close it. `:tabnew` puts its
+    -- empty buffer into the window that is current when the tab is closed
+    -- under it: give that window its buffer back.
+    local win = vim.api.nvim_get_current_win()
+    local stray, buf = vim.api.nvim_win_get_buf(win), shown[win]
+    if buf and stray ~= buf and vim.api.nvim_buf_is_valid(buf) then
+      pcall(vim.api.nvim_win_set_buf, win, buf)
       pcall(vim.api.nvim_buf_delete, stray, {})
+    end
+    if vim.api.nvim_tabpage_is_valid(origin) then
+      pcall(vim.api.nvim_set_current_tabpage, origin)
     end
     return nil, "could not open a tab for the diff"
       .. (ok and "" or ": " .. tostring(result))

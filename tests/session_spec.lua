@@ -1107,6 +1107,65 @@ describe("session", function()
       assert.same({}, worktree.list(repo))
     end)
 
+    it("leaves the next tab alone when an autocommand closes the new tab", function()
+      dirty()
+      vim.cmd.edit(repo .. "/a.txt")
+      local origin = api.nvim_get_current_tabpage()
+      vim.cmd.tabedit(repo .. "/new.txt")
+      local next_tab, next_win = api.nvim_get_current_tabpage(), api.nvim_get_current_win()
+      local next_buf = api.nvim_get_current_buf()
+      api.nvim_set_current_tabpage(origin)
+      -- Neovim makes the tab after the closed one current, not the origin.
+      local id = api.nvim_create_autocmd("TabEnter", {
+        once = true,
+        callback = function()
+          vim.cmd("tabclose")
+        end,
+      })
+      local ok, tab, err = pcall(twintree.open)
+      pcall(api.nvim_del_autocmd, id)
+
+      assert.is_true(ok, tostring(tab))
+      assert.is_nil(tab)
+      assert.truthy(err:find("could not open a tab for the diff", 1, true), err)
+      assert.same({ origin, next_tab }, api.nvim_list_tabpages())
+      assert.equals(origin, api.nvim_get_current_tabpage())
+      assert.same({ next_win }, api.nvim_tabpage_list_wins(next_tab))
+      assert.equals(next_buf, api.nvim_win_get_buf(next_win))
+      assert.equals("", vim.bo[next_buf].bufhidden)
+      assert.is_nil(session.get(next_tab))
+      assert.is_nil(session.get(origin))
+      assert.same({}, tree_bufs())
+      assert.same({}, worktree.list(repo))
+    end)
+
+    it("leaves the next tab alone when the new tab is closed and the layout fails", function()
+      dirty()
+      vim.cmd.edit(repo .. "/a.txt")
+      local origin = api.nvim_get_current_tabpage()
+      vim.cmd.tabedit(repo .. "/new.txt")
+      local next_tab = api.nvim_get_current_tabpage()
+      api.nvim_set_current_tabpage(origin)
+      local id = api.nvim_create_autocmd("TabEnter", {
+        once = true,
+        callback = function()
+          vim.cmd("tabclose")
+        end,
+      })
+      local open_panes = session.open_panes
+      session.open_panes = function()
+        error("E36: Not enough room")
+      end
+      local ok, tab = pcall(twintree.open)
+      session.open_panes = open_panes
+      pcall(api.nvim_del_autocmd, id)
+
+      assert.is_true(ok, tostring(tab))
+      assert.is_nil(tab)
+      assert.same({ origin, next_tab }, api.nvim_list_tabpages())
+      assert.equals(origin, api.nvim_get_current_tabpage())
+    end)
+
     it("reports an autocommand that fails while the tab is opened", function()
       dirty()
       local origin = api.nvim_get_current_win()
