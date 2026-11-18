@@ -13,6 +13,3 @@
   quit Neovim. One possible solution, to be evaluated: open two tabs in that
   case, the default empty one and the diff, so that `:tabclose` on the diff
   lands in the empty tab.
-- Clean up when a diff tab closes: remove the worktree buffers that are not
-  shown anywhere else, so they do not stay in the buffer list and keep the
-  language server of the old worktree running.

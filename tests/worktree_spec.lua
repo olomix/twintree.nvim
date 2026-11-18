@@ -118,6 +118,50 @@ describe("worktree", function()
     assert.equals(0, worktree.clean(repo))
   end)
 
+  it("finds the cached worktree that holds a path", function()
+    local sub_repo, sub_sha = h.repo({ ["a.txt"] = "a\n", ["sub/c.txt"] = "c\n" })
+    local root = assert(worktree.ensure(sub_repo, sub_sha))
+    assert.equals(root, worktree.root_of(root))
+    assert.equals(root, worktree.root_of(root .. "/a.txt"))
+    assert.equals(root, worktree.root_of(root .. "/sub/c.txt"))
+
+    local repo_dir = vim.fs.dirname(root)
+    h.write(cache, "notes.txt", "x\n")
+    h.write(repo_dir, "notes.txt", "x\n")
+    h.write(repo_dir, "notes/x.txt", "x\n")
+    for _, path in ipairs({
+      "",
+      cache,
+      repo_dir,
+      cache .. "/notes.txt",
+      repo_dir .. "/notes.txt",
+      repo_dir .. "/new.txt",
+      repo_dir .. "/notes",
+      repo_dir .. "/notes/x.txt",
+      sub_repo .. "/a.txt",
+    }) do
+      assert.is_nil(worktree.root_of(path))
+    end
+
+    -- A removed worktree is still one: its language server may outlive it.
+    worktree.remove(sub_repo, root)
+    h.write(cache, "keep.txt", "x\n")
+    assert.equals(0, vim.fn.isdirectory(root))
+    assert.equals(root, worktree.root_of(root))
+    assert.equals(root, worktree.root_of(root .. "/a.txt"))
+  end)
+
+  it("finds the worktree through a symbolic link to the cache", function()
+    local link = h.tmpdir() .. "/link"
+    assert(vim.uv.fs_symlink(cache, link))
+    require("twintree").setup({ cache_dir = link })
+    local root = assert(worktree.ensure(repo, sha))
+    assert.truthy(vim.startswith(root, cache .. "/"))
+    local through = vim.fs.joinpath(link, vim.fs.basename(vim.fs.dirname(root)), sha)
+    assert.equals(root, worktree.root_of(through .. "/a.txt"))
+    assert.is_nil(worktree.root_of(link))
+  end)
+
   it("opens worktree files without a swap file", function()
     local path = assert(worktree.ensure(repo, sha))
     vim.o.swapfile = true

@@ -119,9 +119,12 @@ vim.api.nvim_create_autocmd("TabEnter", {
 
 vim.api.nvim_create_autocmd("TabClosed", {
   group = group,
-  desc = "Delete the tree buffer of a closed diff tab",
+  desc = "Release what only a closed diff tab used",
+  -- Without it Neovim fires no buffer events for the buffers wiped out here.
+  nested = true,
   callback = function()
     require("twintree.treeview").sweep()
+    require("twintree.worktree").release(require("twintree.session").pane_roots())
   end,
 })
 

@@ -163,6 +163,12 @@ Files of the old side never use swap files.
 The diff lives in its own tab, opened next to the tabs you already have. To
 end it, close that tab with `:tabclose`. The worktree stays cached.
 
+When no other diff uses that worktree, the buffers of its files are wiped
+out and its language server is stopped. A buffer stays when a window still
+shows it, when a quickfix or location list refers to it, or when it has
+unsaved changes; it goes when a later tab is closed and that is no longer
+so. Files of your working directory are never touched.
+
 When the diff is the only tab, as after `nvim +Twintree`, `:tabclose` refuses
 to close the last tab; quit Neovim with `:qa`.
 
@@ -257,8 +263,9 @@ What to know about the keys of the plugin:
 
 Each commit that is shown gets a detached worktree under
 `<cache_dir>/<repository>-<hash>/<commit>`. Worktrees are kept and reused, so
-reopening a diff is fast and language servers keep their index. They appear
-in `git worktree list` of your repository and lock no branch.
+reopening a diff does not check the commit out again. The language server of
+a worktree runs while a diff of it is open. Worktrees appear in
+`git worktree list` of your repository and lock no branch.
 
 `:TwintreeClean` removes the cached worktrees of the current repository,
 except those used by an open diff.

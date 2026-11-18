@@ -99,6 +99,88 @@ function M.swap_owner(path, swap_dir, kill)
   return job
 end
 
+local lsp_count = 0
+
+---Start an LSP client whose server runs inside Neovim. The returned record
+---tells what the server received: `shutdown`, `exit`, `terminate`.
+---@param opts { root_dir?: string, workspace_folders?: string[],
+---  delay_shutdown?: boolean, fail_shutdown?: boolean, exit_timeout?: integer }
+---@return vim.lsp.Client client
+---@return table server
+function M.lsp(opts)
+  local server = {}
+  local function cmd(dispatchers)
+    local closing = false
+    local function close()
+      if not closing then
+        closing = true
+        dispatchers.on_exit(0, 0)
+      end
+    end
+    return {
+      request = function(method, _, callback)
+        if method == "initialize" then
+          callback(nil, { capabilities = {} })
+        elseif method == "shutdown" then
+          if opts.fail_shutdown then
+            error("the server refuses to shut down")
+          end
+          server.shutdown = true
+          if opts.delay_shutdown then
+            server.answer_shutdown = function()
+              callback(nil, nil)
+            end
+          else
+            callback(nil, nil)
+          end
+        end
+        return true, 1
+      end,
+      notify = function(method)
+        if method == "exit" then
+          server.exit = true
+          close()
+        end
+        return true
+      end,
+      is_closing = function()
+        return closing
+      end,
+      terminate = function()
+        server.terminate = true
+        close()
+      end,
+    }
+  end
+  local folders
+  if opts.workspace_folders then
+    folders = vim.tbl_map(function(dir)
+      return { uri = vim.uri_from_fname(dir), name = dir }
+    end, opts.workspace_folders)
+  end
+  lsp_count = lsp_count + 1
+  local id = assert(vim.lsp.start({
+    -- A name of its own: vim.lsp.start reuses a client by name and root.
+    name = "fake" .. lsp_count,
+    cmd = cmd,
+    root_dir = opts.root_dir,
+    workspace_folders = folders,
+    exit_timeout = opts.exit_timeout,
+  }, { attach = false }))
+  assert(vim.wait(2000, function()
+    local client = vim.lsp.get_client_by_id(id)
+    return client ~= nil and client.initialized == true
+  end, 10), "the LSP client did not initialize")
+  return vim.lsp.get_client_by_id(id), server
+end
+
+---Whether `client` left the list of running clients.
+function M.lsp_gone(client)
+  return vim.wait(2000, function()
+    return vim.lsp.get_client_by_id(client.id) == nil
+  end, 10)
+end
+
 ---A tree line without its padding: runs of spaces become one space.
 function M.squeeze(line)
   return (line:gsub("  +", " "))
