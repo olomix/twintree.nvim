@@ -67,7 +67,7 @@ describe("releasing unused worktrees", function()
     h.write(repo, "b.txt", "b changed\n")
     vim.fn.delete(repo .. "/gone.txt")
     vim.cmd.cd(repo)
-    -- The plugin takes over an empty tab; this one must stay as it is.
+    -- A file of its own for the first tab, to tell its buffer from others.
     vim.cmd.edit(h.tmpdir() .. "/unrelated.txt")
     base = api.nvim_get_current_tabpage()
   end)

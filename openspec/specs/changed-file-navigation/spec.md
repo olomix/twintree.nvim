@@ -268,9 +268,10 @@ options and description. Mappings in other modes SHALL NOT be touched.
   is untouched, and the plugin's mapping is gone
 
 #### Scenario: Diff opened in the only tab
-- **WHEN** a diff session opens in the tab Neovim started with
-- **THEN** the keys work in it at once, also when its first file was not
-  opened
+- **WHEN** a diff session opens from the only tab of Neovim, as it does
+  at startup, and so gets a second tab of its own
+- **THEN** the keys work in the diff tab at once, also when its first
+  file was not opened
 
 #### Scenario: Key that reads like another key
 - **WHEN** the user configured `<C-I>` for next and has a mapping of their

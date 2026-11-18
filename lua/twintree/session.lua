@@ -189,37 +189,17 @@ function M.placeholder()
   return buf
 end
 
-local function is_blank_tab()
-  if #vim.api.nvim_list_tabpages() > 1 then
-    return false
-  end
-  if #vim.api.nvim_tabpage_list_wins(0) > 1 then
-    return false
-  end
-  local buf = vim.api.nvim_get_current_buf()
-  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
-  return vim.api.nvim_buf_get_name(buf) == ""
-    and vim.bo[buf].buftype == ""
-    and not vim.bo[buf].modified
-    and #lines == 1
-    and lines[1] == ""
-end
-
----Create the three-column layout and register the session in its tab.
+---Fill the current tab, a new one, with the three-column layout and
+---register the session in it.
 ---@param repo string
 ---@param before twintree.Side
 ---@param after twintree.Side
 ---@param tree_buf integer
 ---@return integer tab
-function M.create(repo, before, after, tree_buf)
-  if not is_blank_tab() then
-    vim.cmd.tabnew()
-  end
+local function fill_tab(repo, before, after, tree_buf)
   local tab = vim.api.nvim_get_current_tabpage()
   local tree_win = vim.api.nvim_get_current_win()
   vim.bo[vim.api.nvim_get_current_buf()].bufhidden = "wipe"
-  -- The last window of an earlier diff keeps the option of its tree.
-  vim.wo[tree_win].winfixbuf = false
   vim.api.nvim_win_set_buf(tree_win, tree_buf)
 
   M.setup_tree_window(tree_win)
@@ -246,6 +226,68 @@ function M.create(repo, before, after, tree_buf)
   -- Required here, not at the top: the layout module requires this one.
   require("twintree.layout").reapply(tab)
   return tab
+end
+
+---Open a tab with the three-column layout and register the session in it.
+---Always a new tab: a diff in the only tab could not be closed.
+---@param repo string
+---@param before twintree.Side
+---@param after twintree.Side
+---@param tree_buf integer
+---@return integer? tab
+---@return string? err when the layout could not be made; the tab is gone,
+---  the tree buffer is left to the caller
+function M.create(repo, before, after, tree_buf)
+  local origin = vim.api.nvim_get_current_tabpage()
+  local existed, shown, known = {}, {}, {}
+  for _, existing in ipairs(vim.api.nvim_list_tabpages()) do
+    existed[existing] = true
+  end
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    known[buf] = true
+  end
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    shown[win] = vim.api.nvim_win_get_buf(win)
+  end
+  -- An autocommand of the user can fail in `:tabnew`, or close the new tab.
+  local ok, result = pcall(vim.cmd.tabnew)
+  local tab = vim.api.nvim_get_current_tabpage()
+  if existed[tab] then
+    -- The new tab is gone and a tab of the user is current, the one of the
+    -- command or its neighbour: never fill or close it. `:tabnew` puts its
+    -- empty buffer into the window that is current when the tab is closed
+    -- under it: give that window its buffer back. Only for that buffer; a
+    -- buffer the autocommand put there itself stays.
+    local win = vim.api.nvim_get_current_win()
+    local stray, buf = vim.api.nvim_win_get_buf(win), shown[win]
+    local from_tabnew = not known[stray]
+      and vim.api.nvim_buf_get_name(stray) == ""
+      and not vim.bo[stray].modified
+    if from_tabnew and buf and vim.api.nvim_buf_is_valid(buf) then
+      pcall(vim.api.nvim_win_set_buf, win, buf)
+      pcall(vim.api.nvim_buf_delete, stray, {})
+    end
+    if vim.api.nvim_tabpage_is_valid(origin) then
+      pcall(vim.api.nvim_set_current_tabpage, origin)
+    end
+    return nil, "could not open a tab for the diff"
+      .. (ok and "" or ": " .. tostring(result))
+  end
+  if ok then
+    ok, result = pcall(fill_tab, repo, before, after, tree_buf)
+    if ok then
+      return result
+    end
+  end
+
+  if vim.api.nvim_tabpage_is_valid(tab) then
+    pcall(vim.cmd, "tabclose! " .. vim.api.nvim_tabpage_get_number(tab))
+  end
+  -- Which tab Neovim makes current after a close is the user's setting.
+  if vim.api.nvim_tabpage_is_valid(origin) then
+    pcall(vim.api.nvim_set_current_tabpage, origin)
+  end
+  return nil, "could not create the windows of the diff: " .. tostring(result)
 end
 
 ---@param win integer

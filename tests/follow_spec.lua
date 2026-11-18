@@ -679,18 +679,6 @@ describe("following", function()
       assert.truthy(vim.tbl_contains(h.tree_lines(state().tree_buf), "a.txt +1 -1 M"))
       assert.same({ "a.txt +1 -1 M" }, marked())
     end)
-
-    it("can be opened in a window that was the tree of an earlier diff", function()
-      vim.cmd("silent! tabonly!")
-      api.nvim_set_current_win(tree())
-      vim.cmd("only!")
-      vim.cmd("%bwipeout!")
-      assert.is_true(vim.wo.winfixbuf)
-
-      tab = assert(twintree.open())
-      assert.equals(1, #api.nvim_list_tabpages())
-      assert.equals(state().tree_buf, api.nvim_win_get_buf(tree()))
-    end)
   end)
 
   describe("the mark in the tree", function()

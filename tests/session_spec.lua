@@ -53,9 +53,16 @@ describe("session", function()
   end
 
   describe("layout", function()
-    it("reuses a lone empty tab", function()
+    it("opens a new tab next to a lone empty tab and leaves that one alone", function()
+      local first, win = api.nvim_get_current_tabpage(), api.nvim_get_current_win()
+      local buf = api.nvim_get_current_buf()
       local tab = assert(twintree.open())
-      assert.equals(1, #api.nvim_list_tabpages())
+      assert.same({ first, tab }, api.nvim_list_tabpages())
+      assert.equals(tab, api.nvim_get_current_tabpage())
+      assert.same({ win }, api.nvim_tabpage_list_wins(first))
+      assert.equals(buf, api.nvim_win_get_buf(win))
+      assert.is_true(vim.bo[buf].buflisted)
+      assert.equals("", vim.bo[buf].bufhidden)
 
       local state = session.get(tab)
       assert.same(
@@ -863,7 +870,7 @@ describe("session", function()
     dirty()
     local one = session.get(assert(twintree.open()))
     local two = session.get(assert(twintree.open()))
-    assert.equals(2, #api.nvim_list_tabpages())
+    assert.equals(3, #api.nvim_list_tabpages())
 
     two = select(two, "new.txt")
     one = session.get(api.nvim_win_get_tabpage(one.wins.tree))
@@ -986,6 +993,293 @@ describe("session", function()
       assert.equals("twintree: removed 1 cached worktree(s)", messages[1].msg)
       assert.is_nil(vim.uv.fs_stat(stale))
       assert.same({ state.before.root }, worktree.list(repo))
+    end)
+  end)
+
+  describe("the tab of a diff", function()
+    local function tree_bufs()
+      return vim.tbl_filter(function(buf)
+        return vim.startswith(api.nvim_buf_get_name(buf), "twintree://tree/")
+      end, api.nvim_list_bufs())
+    end
+
+    it("closes with `:tabclose` when the diff was opened in an empty Neovim", function()
+      dirty()
+      local origin, buf = api.nvim_get_current_win(), api.nvim_get_current_buf()
+      assert(twintree.open())
+
+      vim.cmd.tabclose()
+
+      assert.equals(1, #api.nvim_list_tabpages())
+      assert.equals(origin, api.nvim_get_current_win())
+      assert.equals(buf, api.nvim_win_get_buf(origin))
+      assert.is_nil(session.get())
+      assert.same({}, tree_bufs())
+    end)
+
+    it("counts as a failed open when an autocommand closes it, also from an empty Neovim", function()
+      h.write(repo, "a.txt", "one\nTWO\nthree\n")
+      local origin = api.nvim_get_current_win()
+      local id = api.nvim_create_autocmd("BufReadPost", {
+        pattern = "*/a.txt",
+        once = true,
+        callback = function()
+          vim.cmd("tabclose!")
+        end,
+      })
+      local ok, tab, err = pcall(twintree.open)
+      pcall(api.nvim_del_autocmd, id)
+
+      assert.is_true(ok, tostring(tab))
+      assert.is_nil(tab)
+      assert.equals(session.TAB_GONE, err)
+      assert.equals(1, #api.nvim_list_tabpages())
+      assert.equals(origin, api.nvim_get_current_win())
+      assert.is_nil(session.get())
+      assert.same({}, tree_bufs())
+      -- What TabClosed and TabEnter do for a tab that closes in the open.
+      assert.equals("", vim.fn.maparg("]<C-f>", "n"))
+      for _, loaded in ipairs(api.nvim_list_bufs()) do
+        assert.is_nil(worktree.root_of(api.nvim_buf_get_name(loaded)))
+      end
+
+      -- The buffers of a worktree that was cached before go as well.
+      local cached = assert(worktree.ensure(repo, first))
+      id = api.nvim_create_autocmd("BufReadPost", {
+        pattern = "*/a.txt",
+        once = true,
+        callback = function()
+          vim.cmd("tabclose!")
+        end,
+      })
+      assert.is_nil(twintree.open())
+      pcall(api.nvim_del_autocmd, id)
+      assert.same({ cached }, worktree.list(repo))
+      for _, loaded in ipairs(api.nvim_list_bufs()) do
+        assert.is_nil(worktree.root_of(api.nvim_buf_get_name(loaded)))
+      end
+    end)
+
+    it("is gone again when the windows of the diff cannot be made", function()
+      dirty()
+      local origin, buf = api.nvim_get_current_win(), api.nvim_get_current_buf()
+      local open_panes = session.open_panes
+      session.open_panes = function()
+        error("E36: Not enough room")
+      end
+      local ok, tab, err = pcall(twintree.open)
+      session.open_panes = open_panes
+
+      assert.is_true(ok, tostring(tab))
+      assert.is_nil(tab)
+      assert.truthy(err:find("could not create the windows of the diff", 1, true), err)
+      assert.truthy(err:find("E36: Not enough room", 1, true), err)
+      assert.equals(1, #api.nvim_list_tabpages())
+      assert.equals(origin, api.nvim_get_current_win())
+      assert.equals(buf, api.nvim_win_get_buf(origin))
+      assert.is_nil(session.get())
+      assert.same({}, tree_bufs())
+      assert.same({}, worktree.list(repo))
+    end)
+
+    it("leaves the tab of the command alone when an autocommand closes the new tab", function()
+      dirty()
+      vim.cmd.edit(repo .. "/a.txt")
+      local origin, buf = api.nvim_get_current_win(), api.nvim_get_current_buf()
+      local id = api.nvim_create_autocmd("TabEnter", {
+        once = true,
+        callback = function()
+          vim.cmd("tabclose")
+        end,
+      })
+      local ok, tab, err = pcall(twintree.open)
+      pcall(api.nvim_del_autocmd, id)
+
+      assert.is_true(ok, tostring(tab))
+      assert.is_nil(tab)
+      assert.truthy(err:find("could not open a tab for the diff", 1, true), err)
+      assert.equals(1, #api.nvim_list_tabpages())
+      assert.same({ origin }, api.nvim_tabpage_list_wins(0))
+      assert.equals(buf, api.nvim_win_get_buf(origin))
+      assert.equals("", vim.bo[buf].bufhidden)
+      assert.is_nil(session.get())
+      assert.same({}, tree_bufs())
+      assert.same({}, worktree.list(repo))
+    end)
+
+    it("leaves the next tab alone when an autocommand closes the new tab", function()
+      dirty()
+      vim.cmd.edit(repo .. "/a.txt")
+      local origin = api.nvim_get_current_tabpage()
+      vim.cmd.tabedit(repo .. "/new.txt")
+      local next_tab, next_win = api.nvim_get_current_tabpage(), api.nvim_get_current_win()
+      local next_buf = api.nvim_get_current_buf()
+      api.nvim_set_current_tabpage(origin)
+      -- Neovim makes the tab after the closed one current, not the origin.
+      local id = api.nvim_create_autocmd("TabEnter", {
+        once = true,
+        callback = function()
+          vim.cmd("tabclose")
+        end,
+      })
+      local ok, tab, err = pcall(twintree.open)
+      pcall(api.nvim_del_autocmd, id)
+
+      assert.is_true(ok, tostring(tab))
+      assert.is_nil(tab)
+      assert.truthy(err:find("could not open a tab for the diff", 1, true), err)
+      assert.same({ origin, next_tab }, api.nvim_list_tabpages())
+      assert.equals(origin, api.nvim_get_current_tabpage())
+      assert.same({ next_win }, api.nvim_tabpage_list_wins(next_tab))
+      assert.equals(next_buf, api.nvim_win_get_buf(next_win))
+      assert.equals("", vim.bo[next_buf].bufhidden)
+      assert.is_nil(session.get(next_tab))
+      assert.is_nil(session.get(origin))
+      assert.same({}, tree_bufs())
+      assert.same({}, worktree.list(repo))
+    end)
+
+    it("leaves the next tab alone when the new tab is closed and the layout fails", function()
+      dirty()
+      vim.cmd.edit(repo .. "/a.txt")
+      local origin = api.nvim_get_current_tabpage()
+      vim.cmd.tabedit(repo .. "/new.txt")
+      local next_tab = api.nvim_get_current_tabpage()
+      api.nvim_set_current_tabpage(origin)
+      local id = api.nvim_create_autocmd("TabEnter", {
+        once = true,
+        callback = function()
+          vim.cmd("tabclose")
+        end,
+      })
+      local open_panes = session.open_panes
+      session.open_panes = function()
+        error("E36: Not enough room")
+      end
+      local ok, tab = pcall(twintree.open)
+      session.open_panes = open_panes
+      pcall(api.nvim_del_autocmd, id)
+
+      assert.is_true(ok, tostring(tab))
+      assert.is_nil(tab)
+      assert.same({ origin, next_tab }, api.nvim_list_tabpages())
+      assert.equals(origin, api.nvim_get_current_tabpage())
+    end)
+
+    it("keeps a buffer that an autocommand shows after it closed the new tab", function()
+      dirty()
+      vim.cmd.edit(repo .. "/new.txt")
+      local other = api.nvim_get_current_buf()
+      vim.cmd.edit(repo .. "/a.txt")
+      local origin = api.nvim_get_current_win()
+      local id = api.nvim_create_autocmd("TabNewEntered", {
+        once = true,
+        callback = function()
+          vim.cmd("tabclose")
+          vim.cmd.buffer(other)
+        end,
+      })
+      local ok, tab = pcall(twintree.open)
+      pcall(api.nvim_del_autocmd, id)
+
+      assert.is_true(ok, tostring(tab))
+      assert.is_nil(tab)
+      assert.equals(1, #api.nvim_list_tabpages())
+      assert.is_true(api.nvim_buf_is_valid(other))
+      assert.equals(other, api.nvim_win_get_buf(origin))
+    end)
+
+    it("reports an autocommand that fails while the tab is opened", function()
+      dirty()
+      local origin = api.nvim_get_current_win()
+      local id = api.nvim_create_autocmd("TabNew", {
+        once = true,
+        callback = function()
+          error("a broken autocommand")
+        end,
+      })
+      local ok, tab, err = pcall(twintree.open)
+      pcall(api.nvim_del_autocmd, id)
+
+      assert.is_true(ok, tostring(tab))
+      assert.is_nil(tab)
+      assert.truthy(err:find("a broken autocommand", 1, true), err)
+      assert.equals(1, #api.nvim_list_tabpages())
+      assert.equals(origin, api.nvim_get_current_win())
+      assert.is_nil(session.get())
+      assert.same({}, tree_bufs())
+      assert.same({}, worktree.list(repo))
+    end)
+
+    it("counts as a failed open when an autocommand closes it after the file was shown", function()
+      h.write(repo, "a.txt", "one\nTWO\nthree\n")
+      local origin = api.nvim_get_current_win()
+      -- The focus goes to the after pane when both files are loaded.
+      local id = api.nvim_create_autocmd("WinEnter", {
+        callback = function()
+          local state = session.get()
+          if state and api.nvim_get_current_win() == state.wins.after and state.pair then
+            vim.cmd("tabclose!")
+          end
+        end,
+      })
+      local ok, tab, err = pcall(twintree.open)
+      pcall(api.nvim_del_autocmd, id)
+
+      assert.is_true(ok, tostring(tab))
+      assert.is_nil(tab)
+      assert.equals(session.TAB_GONE, err)
+      assert.equals(1, #api.nvim_list_tabpages())
+      assert.equals(origin, api.nvim_get_current_win())
+      assert.same({}, tree_bufs())
+      assert.same({}, worktree.list(repo))
+      assert.equals("", vim.fn.maparg("]<C-f>", "n"))
+    end)
+
+    it("returns to the tab of the command when that one has tabs after it", function()
+      dirty()
+      vim.cmd.edit(repo .. "/a.txt")
+      local origin = api.nvim_get_current_tabpage()
+      vim.cmd.tabnew()
+      api.nvim_set_current_tabpage(origin)
+      local open_panes = session.open_panes
+      session.open_panes = function()
+        error("E36: Not enough room")
+      end
+      local tab = twintree.open()
+      session.open_panes = open_panes
+
+      assert.is_nil(tab)
+      assert.equals(2, #api.nvim_list_tabpages())
+      assert.equals(origin, api.nvim_get_current_tabpage())
+    end)
+
+    it("closes when it is between other tabs", function()
+      dirty()
+      vim.cmd.edit(repo .. "/a.txt")
+      local origin = api.nvim_get_current_tabpage()
+      vim.cmd.tabnew()
+      api.nvim_set_current_tabpage(origin)
+      local tab = assert(twintree.open())
+      assert.equals(2, api.nvim_tabpage_get_number(tab))
+
+      vim.cmd.tabclose()
+
+      assert.equals(2, #api.nvim_list_tabpages())
+      assert.is_false(api.nvim_tabpage_is_valid(tab))
+      assert.same({}, tree_bufs())
+    end)
+
+    it("cannot be closed once the user made it the only tab", function()
+      dirty()
+      local tab = assert(twintree.open())
+      vim.cmd.tabonly()
+
+      local ok, err = pcall(vim.cmd.tabclose)
+
+      assert.is_false(ok)
+      assert.truthy(tostring(err):find("E784", 1, true), err)
+      assert.truthy(session.get(tab))
     end)
   end)
 end)
