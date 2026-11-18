@@ -206,11 +206,15 @@ function M.cursor_line(state)
   return lines_of(state)[vim.api.nvim_win_get_cursor(0)[1]]
 end
 
+M.OTHER_TAB = "the diff of this tree is in another tab"
+
 ---Open the file or toggle the directory under the cursor.
 function M.activate()
   local tab = vim.api.nvim_get_current_tabpage()
   local state = session.get(tab)
-  if not state then
+  -- A tree shown in another tab: its lines are not those of this tab's diff.
+  if not state or state.tree_buf ~= vim.api.nvim_get_current_buf() then
+    vim.notify("twintree: " .. M.OTHER_TAB, vim.log.levels.ERROR)
     return
   end
   local line = M.cursor_line(state)

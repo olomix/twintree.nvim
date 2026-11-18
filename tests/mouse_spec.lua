@@ -115,6 +115,40 @@ describe("the mouse in the tree", function()
     end)
   end)
 
+  it("says that the diff of a tree shown in another tab is elsewhere", function()
+    tab = assert(twintree.open())
+    local before, buf = shown("after"), state().tree_buf
+    local other = h.repo({ ["z.txt"] = "z\n", ["y.txt"] = "y\n" })
+    h.write(other, "z.txt", "z changed\n")
+    h.write(other, "y.txt", "y changed\n")
+
+    local function assert_refused(key)
+      messages = {}
+      local win = api.nvim_get_current_win()
+      api.nvim_win_set_cursor(win, { 1, 0 })
+      mouse = { winid = win, line = 1 }
+      h.keys(key)
+      assert.same({ "twintree: the diff of this tree is in another tab" }, messages)
+      assert.equals(before, shown("after"))
+      assert.is_nil(state().collapsed["src"])
+    end
+
+    -- A tab without a diff.
+    vim.cmd("tab sbuffer " .. buf)
+    assert_refused("<CR>")
+    assert_refused("<2-LeftMouse>")
+    vim.cmd.tabclose()
+
+    -- Another diff tab: its own lines are not those of this tree.
+    vim.cmd.cd(other)
+    local second = assert(twintree.open())
+    local second_after = api.nvim_win_get_buf(session.get(second).wins.after)
+    vim.cmd("sbuffer " .. buf)
+    assert_refused("<CR>")
+    assert_refused("<2-LeftMouse>")
+    assert.equals(second_after, api.nvim_win_get_buf(session.get(second).wins.after))
+  end)
+
   it("lets a key of the user for the filetype replace the plugin's", function()
     local pressed = {}
     api.nvim_create_autocmd("FileType", {

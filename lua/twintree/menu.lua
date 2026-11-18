@@ -67,10 +67,12 @@ end
 function M.refresh()
   local ok, err = pcall(function()
     M.remove()
-    -- With 'mousemodel' "popup" the click can be in another window.
-    local clicked = vim.fn.getmousepos().winid
+    -- With 'mousemodel' "popup" the click can be in another window; on the
+    -- separator of the window it is on no line.
+    local mouse = vim.fn.getmousepos()
     if
-      clicked == vim.api.nvim_get_current_win()
+      mouse.winid == vim.api.nvim_get_current_win()
+      and mouse.line > 0
       and require("twintree.path").on_tree_line()
     then
       add()

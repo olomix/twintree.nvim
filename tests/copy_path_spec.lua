@@ -61,6 +61,7 @@ describe("copying a path", function()
       ["same.txt"] = "same\n",
       ["my file.txt"] = "spaces\n",
       ["we\tird.txt"] = "tab\n",
+      ["end\r"] = "cr\n",
       ["ren/first.txt"] = "renamed 1\nrenamed 2\nrenamed 3\n",
     })
     h.write(repo, "a.txt", "a changed\n")
@@ -68,6 +69,7 @@ describe("copying a path", function()
     h.write(repo, "lib/a/b/c.txt", "c changed\n")
     h.write(repo, "my file.txt", "spaces changed\n")
     h.write(repo, "we\tird.txt", "tab changed\n")
+    h.write(repo, "end\r", "cr changed\n")
     h.write(repo, "new.txt", "new\n")
     h.git(repo, "add", "new.txt")
     h.git(repo, "rm", "-q", "-r", "gone")
@@ -149,6 +151,12 @@ describe("copying a path", function()
     it("copies a control character raw and reports it escaped", function()
       assert.equals("we\tird.txt", copy_line("ird.txt", "relative"))
       assert.equals("twintree: copied we\\x09ird.txt", last_message().msg)
+    end)
+
+    it("adds nothing to a name that ends in a line break", function()
+      assert.equals("end\r", copy_line("end", "relative"))
+      assert.equals("end\r", vim.fn.getreg("+"))
+      assert.equals("twintree: copied end\\x0d", last_message().msg)
     end)
 
     it("completes the three forms", function()
@@ -302,6 +310,7 @@ end)
 
 describe("the menu of the right mouse button", function()
   local repo, tab, mouse_win
+  local mouse_line = 1
 
   local function state()
     return assert(session.get(tab))
@@ -360,7 +369,7 @@ describe("the menu of the right mouse button", function()
     vim.cmd([[anoremenu PopUp.Inspect <Cmd>Inspect<CR>]])
     vim.cmd([[nnoremenu PopUp.Mine <Cmd>echo "mine"<CR>]])
     vim.fn.getmousepos = function()
-      return { winid = mouse_win, line = 1 }
+      return { winid = mouse_win, line = mouse_line }
     end
     repo = h.repo({ ["a.txt"] = "a\n", ["src/app.lua"] = "app\n" })
     h.write(repo, "a.txt", "a changed\n")
@@ -406,6 +415,14 @@ describe("the menu of the right mouse button", function()
     api.nvim_set_current_win(tree())
     popup(state().wins.after)
     assert.is_false(has_own())
+
+    -- On the separator of the tree window the mouse is on no line.
+    mouse_line = 0
+    popup()
+    assert.is_false(has_own())
+    mouse_line = 1
+    popup()
+    assert.is_true(has_own())
 
     api.nvim_set_current_tabpage(api.nvim_list_tabpages()[1])
     popup()

@@ -58,6 +58,13 @@ triple or quadruple click in the tree.
   tab and double-clicks a file line there
 - **THEN** that file is shown
 
+#### Scenario: Tree buffer in another tab
+- **WHEN** the user opened the tree buffer of a diff in a window of
+  another tab, with or without a diff of its own, and double-clicks a
+  line or presses `<CR>` there
+- **THEN** a message says that the diff of this tree is in another tab,
+  and no file is shown and no directory is folded in any tab
+
 ### Requirement: The user's own keys in the tree
 A buffer-local mapping that the user defines for the tree in a `FileType`
 autocommand for `twintree` SHALL take the place of the plugin's mapping
@@ -148,9 +155,10 @@ exists there, and to the before side otherwise.
 - **THEN** the clipboard holds it unchanged, without quotes or escapes
 
 #### Scenario: Name with a control character
-- **WHEN** the name of the file has a control character
-- **THEN** the clipboard holds the name as it is, and the message shows
-  the character escaped, as the tree does
+- **WHEN** the name of the file has a control character, also a line
+  break at its end
+- **THEN** the clipboard holds the name as it is, with nothing added, and
+  the message shows the character escaped, as the tree does
 
 ### Requirement: What the copy command acts on
 When the current buffer is a tree, `:TwintreeCopyPath` SHALL copy the path
@@ -260,6 +268,11 @@ SHALL NOT change any other item of the menu, nor `'mouse'` or
 #### Scenario: Right click on a directory line
 - **WHEN** the user clicks a directory line with the right mouse button
 - **THEN** the menu contains the three items
+
+#### Scenario: Right click on the separator of the tree window
+- **WHEN** the cursor is on a file line of the tree and the user clicks
+  the vertical separator of the tree window with the right mouse button
+- **THEN** the menu contains none of the three items
 
 #### Scenario: Right click in a pane
 - **WHEN** the user clicks in a pane of the diff tab with the right mouse

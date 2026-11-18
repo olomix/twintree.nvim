@@ -67,8 +67,6 @@ See proposal.md for the motivation.
   A triple click still selects the line.
 - The menu items in visual mode.
 - Any change to `'mouse'` or `'mousemodel'`.
-- `<CR>` in a tree buffer that is shown in a tab without its diff: it
-  does nothing today, and stays so here. `TODO.md` gets an item.
 
 ## Decisions
 
@@ -82,6 +80,13 @@ is Neovim's own handling. The first click of the pair is not mapped, so
 Neovim has already moved the cursor, and focused the tree window, when
 the mapping runs. `<LeftMouse>`, `<LeftDrag>`, `<LeftRelease>`,
 `<3-LeftMouse>` and `<4-LeftMouse>` stay unmapped.
+
+`activate()` acts only when the current buffer is the tree of the
+current tab. In a tree buffer the user opened in another tab, the lines
+are those of another diff, or the tab has no diff at all; there `<CR>`
+and the double click report that the diff of the tree is in another tab.
+Until now `<CR>` did nothing in a tab without a diff, and acted on the
+wrong diff in another diff tab.
 
 Alternative: act on a single click that did not drag. Rejected by the
 owner: a click that only gives the tree the focus would open a file.
@@ -100,8 +105,7 @@ changes `<CR>` and `R`, for which the plugin's key won until now.
 
 A new module, `lua/twintree/path.lua`, without effects on windows.
 
-The target is a relative path (or none), an absolute path and whether it
-is a directory:
+The target is a relative path (or none) and an absolute path:
 
 - The current buffer is a tree buffer: the session is the one of the tab
   whose `tree_buf` it is, found by looking through the tab pages, so
@@ -129,8 +133,10 @@ click, the command and the menu read a line in one way.
 
 `init.lua` gets `copy_path(form)`: it validates the form (default
 `relative`), asks for the target and the text, refuses when
-`vim.fn.has("clipboard") == 0`, writes with
-`pcall(vim.fn.setreg, "+", text)` and returns the text, or `nil, err`.
+`vim.fn.has("clipboard") == 0`, writes characterwise with
+`pcall(vim.fn.setreg, "+", text, "c")` and returns the text, or
+`nil, err`. Without the type, a name that ends in a line break would be
+taken as a whole line and get one more.
 The command has `nargs = "?"` and no range or bang; Neovim hands two
 words over as one argument, which is then an unknown form. Its
 completion filters the three forms by the typed prefix. It reports `twintree: copied <text>`, with control
@@ -168,8 +174,8 @@ keeps the four entries in step:
   left alone.
 - Adding, after removing: only on `MenuPopup` in normal mode, when
   `getmousepos()` names the current window, the current buffer is a tree
-  buffer with a session, and the line of the cursor is a file or a
-  directory. A name the user already uses is not defined again.
+  buffer with a session, the mouse is on a line (not on the separator of
+  the window), and the line of the cursor is a file or a directory. A name the user already uses is not defined again.
 - Removing alone: on `BufLeave` of a tree buffer, so that a menu opened
   by `:popup` elsewhere, or after the tab was closed, has no items; and
   when the plugin file is sourced.

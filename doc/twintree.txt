@@ -184,6 +184,10 @@ Tree window (left):
     A buffer-local key that you map for the filetype `twintree` in a
     |FileType| autocommand replaces the key of the plugin.
 
+    <CR> and the double click work in the tab of the diff. In a tree buffer
+    that you opened in another tab they say that the diff of the tree is
+    in another tab.
+
                                                                *twintree-menu*
     The menu of the right mouse button, see |popup-menu|, starts with three
     items when it opens in normal mode on a file or directory line of the

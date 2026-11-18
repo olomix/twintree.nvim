@@ -126,7 +126,8 @@ function M.copy_path(form)
   if vim.fn.has("clipboard") == 0 then
     return nil, "no clipboard provider, see :help clipboard"
   end
-  local written, reason = pcall(vim.fn.setreg, "+", text)
+  -- Characterwise: a name that ends in a line break is not a whole line.
+  local written, reason = pcall(vim.fn.setreg, "+", text, "c")
   if not written then
     return nil, "could not write the clipboard: " .. tostring(reason)
   end
