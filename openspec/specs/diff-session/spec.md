@@ -75,9 +75,9 @@ are kept after the session opens is defined by the `diff-layout` capability.
 - **THEN** the tree keeps its width and the two panes share the rest equally
 
 ### Requirement: Tab placement
-A session SHALL open in a new tab, except that it SHALL reuse the current tab
-when that tab is the only tab and contains a single window showing an empty,
-unnamed, unmodified buffer.
+A session SHALL always open in a new tab, which becomes the current tab.
+The tab the command was run in SHALL stay as it was, also when it is the
+only tab and shows nothing but an empty buffer.
 
 #### Scenario: Opened from an editing session
 - **WHEN** the user runs `:Twintree` while a file is open
@@ -85,14 +85,90 @@ unnamed, unmodified buffer.
 
 #### Scenario: Started from the command line
 - **WHEN** Neovim is started with `nvim +Twintree`
-- **THEN** the session uses the first tab and no second tab exists
+- **THEN** there are two tabs: the first holds one window with the empty
+  buffer Neovim started with, the second holds the session and is the
+  current tab
+
+#### Scenario: Opened in an empty Neovim
+- **WHEN** Neovim was started without a file and the user runs
+  `:Twintree`
+- **THEN** the session opens in a second tab and the first tab still
+  holds its one empty window
+
+#### Scenario: Ending a diff that was started from the command line
+- **WHEN** Neovim is started with `nvim +Twintree` and the user runs
+  `:tabclose` in the diff tab
+- **THEN** the tab closes without an error, the first tab is the current
+  one, no session is left, and the tree buffer of the diff is gone
+
+#### Scenario: Ending a diff whose layout was changed
+- **WHEN** Neovim is started with `nvim +Twintree`, the user closes a
+  pane or opens another window in the diff tab, and runs `:tabclose`
+- **THEN** the tab closes without an error, the first tab is the current
+  one with its buffer as it was, no session is left, and the tree buffer
+  of the diff is gone
+
+#### Scenario: Ending a diff between other tabs
+- **WHEN** a diff was opened from a tab that has tabs to its right, and
+  the user runs `:tabclose` in the diff tab
+- **THEN** the tab closes and Neovim chooses the current tab as it does
+  for any closed tab
+
+#### Scenario: Diff left as the only tab
+- **WHEN** the user closes every other tab, or runs `:tabonly` in the
+  diff tab, and then runs `:tabclose`
+- **THEN** Neovim refuses to close the last tab, and the session stays
+  as it is
+
+#### Scenario: Open that fails
+- **WHEN** `:Twintree` is run in the only tab and the session cannot be
+  opened
+- **THEN** there is still one tab, with its one window and its buffer as
+  they were
+
+#### Scenario: Layout that cannot be made
+- **WHEN** the three windows of the session cannot be created, as in a
+  terminal too small for them
+- **THEN** an error message says so, the tab that was opened for the
+  session is closed again, the tab the command was run in is the current
+  one and unchanged, no session and no tree buffer is left, and no
+  worktree this command created remains
+
+#### Scenario: Tab closed while the first file is shown
+- **WHEN** `:Twintree` is run in the only tab and an autocommand closes
+  the new tab while the first file is shown, or when the file gets the
+  focus
+- **THEN** the command reports that the diff tab was closed, there is
+  one tab with its one window as it was, no tree buffer and no buffer of
+  a cached worktree is left, and the keys of the plugin are not bound
+
+#### Scenario: New tab closed at once
+- **WHEN** an autocommand of the user closes the new tab as soon as it is
+  entered
+- **THEN** the command reports that no tab could be opened, the tab it
+  was run in is current, and that tab and the tab Neovim moved to when
+  the new one closed have their windows and buffers as before
+
+#### Scenario: New tab closed and another buffer shown
+- **WHEN** an autocommand of the user closes the new tab and then shows
+  a buffer of its choice in the window
+- **THEN** the command reports that no tab could be opened, and that
+  buffer still exists and is still shown
+
+#### Scenario: Autocommand that fails while the tab is opened
+- **WHEN** an autocommand of the user raises an error while the new tab
+  is created
+- **THEN** the command reports that error as a message, no Lua error is
+  raised, and no extra tab, no tree buffer and no worktree this command
+  created remains
 
 #### Scenario: Started from the command line without changes
 - **WHEN** Neovim is started with `nvim +Twintree` for a diff without
   changed files, on any supported Neovim version and with Neovim's
   bundled plugins loaded
-- **THEN** the tab has exactly three windows, the cursor is in the tree
-  window, and no window shows the tree a second time
+- **THEN** the diff tab has exactly three windows, the cursor is in the
+  tree window, no window shows the tree a second time, and the first tab
+  still has its one window
 
 #### Scenario: Previous window of the tree
 - **WHEN** a session opens with the cursor in the tree window and the
